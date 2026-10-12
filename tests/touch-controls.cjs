@@ -7,20 +7,24 @@ class Element {
   constructor(action) { this.dataset={action};this.listeners={};this.style={setProperty(){}};this.children=[];this.open=false;this.captured=new Set();this.classes=new Set();this.classList={add:(...s)=>s.forEach(v=>this.classes.add(v)),remove:(...s)=>s.forEach(v=>this.classes.delete(v)),toggle:(v,b)=>b?this.classes.add(v):this.classes.delete(v)}; }
   addEventListener(type,fn){(this.listeners[type]??=[]).push(fn);}
   fire(type,params={}){const event={pointerId:1,button:0,clientX:0,clientY:0,preventDefault(){},...params};for(const fn of this.listeners[type]||[])fn(event);}
-  setPointerCapture(id){this.captured.add(id);}hasPointerCapture(id){return this.captured.has(id);}
+  setPointerCapture(id){this.captured.add(id);}releasePointerCapture(id){this.captured.delete(id);}hasPointerCapture(id){return this.captured.has(id);}
   getBoundingClientRect(){return{left:0,top:0,width:100,height:100};}
   contains(t){return t===this;}close(){this.open=false;this.fire('close');}querySelector(sel){return elements[sel]??=new Element();}append(...args){this.children.push(...args);}replaceChildren(){this.children=[];}setAttribute(){}add(){}focus(){}showModal(){this.open=true;}
 }
-const elements={};const actions=['jump','attack','special','grab','shield','taunt','pause','start','back'];const buttons=actions.map(a=>new Element(a));
+const elements={};const actions=['jump','attack','special','grab','shield','taunt','pause','start','menu'];const buttons=actions.map(a=>new Element(a));
 const events=[],windowEvents={};const api={isPlaying:false,load:async()=>{},resume(){this.isPlaying=true;},suspend(){this.isPlaying=false;}};const player=new Element();player.ruffle=()=>api;
 const document={documentElement:new Element(),hidden:false,querySelector:sel=>elements[sel]??=new Element(),querySelectorAll:sel=>sel==='[data-action]'?buttons:[],addEventListener(type,fn){windowEvents['document-'+type]=fn;},createElement:()=>new Element()};
 const window={RufflePlayer:{newest:()=>({createPlayer:()=>player})},addEventListener:(type,fn)=>windowEvents[type]=fn,dispatchEvent:e=>events.push([e.type,e.code])};
-const gamepads=[],frames=[];document.body=new Element();
-const context={window,document,localStorage:{getItem(){return null;},setItem(){}},KeyboardEvent:class{constructor(type,opts){this.type=type;Object.assign(this,opts);}},Option:class{},location:{reload(){}},navigator:{getGamepads:()=>gamepads},requestAnimationFrame:fn=>frames.push(fn)};
+const gamepads=[],frames=[];let saved;const initial={keys:{pause:'Enter',jump:'KeyV'},pad:{select:'back'}};document.body=new Element();
+const context={window,document,localStorage:{getItem(){return JSON.stringify(initial);},setItem(key,value){saved=JSON.parse(value);}},KeyboardEvent:class{constructor(type,opts){this.type=type;Object.assign(this,opts);}},Option:class{},location:{reload(){}},navigator:{getGamepads:()=>gamepads},requestAnimationFrame:fn=>frames.push(fn)};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../SSF2-iOS/Web/controls.js'),'utf8'),context);
 (async()=>{
- await new Promise(setImmediate);elements['#start'].onclick();assert.equal(api.isPlaying,true);
+ await new Promise(setImmediate);assert.equal(saved.keys.pause,'Space');assert.equal(saved.keys.jump,'KeyV');assert.equal(saved.pad.select,'menu');assert(document.body.classes.has('fullscreen'));
+ // Restore jump for the shared-key input checks.
+ elements['#settings'].onclick();const jumpRow=elements['#bindings'].children.find(r=>r.children[0]==='Jump / tap jump');jumpRow.children[1].value='KeyW';jumpRow.children[1].onchange();elements['#panel'].close();elements['#start'].onclick();assert.equal(api.isPlaying,true);
  const pad=elements['#dpad'],jump=buttons[0],attack=buttons[1];
+ for(const action of ['pause','start']){events.length=0;const b=buttons.find(b=>b.dataset.action===action);b.fire('pointerdown');b.fire('pointerup');assert.deepEqual(events,[['keydown','Space'],['keyup','Space']]);}events.length=0;
+ buttons.at(-1).fire('pointerdown');assert(elements['#panel'].open);assert.equal(api.isPlaying,false);assert.equal(events.length,0);elements['#panel'].close();
  pad.fire('pointerdown',{pointerId:1,clientX:85,clientY:15});
  assert.deepEqual(events,[['keydown','KeyD'],['keydown','KeyW']],'Diagonal movement presses two keys');
  jump.fire('pointerdown',{pointerId:2});attack.fire('pointerdown',{pointerId:3});
@@ -64,14 +68,17 @@ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../SSF2-iOS/Web/controls
  // Touch layout editor: drag the D-pad; no game input while editing
  elements['#settings'].onclick();elements['#edit-layout'].onclick();assert.equal(elements['#editor'].hidden,false);
  events.length=0;const capture=type=>windowEvents['document-'+type];
- capture('pointerdown')({target:pad,clientX:10,clientY:10,preventDefault(){},stopPropagation(){}});
- capture('pointermove')({clientX:40,clientY:30,preventDefault(){}});capture('pointerup')({});
- assert.equal(pad.style.translate,'30px 20px','Dragging moves the control');assert.equal(events.length,0,'Editing sends no keys');
- elements['#editor-bigger'].onclick();assert.equal(pad.style.scale,'1.1','Resize grows the selected control');
+ capture('pointerdown')({pointerId:7,target:pad,clientX:10,clientY:10,preventDefault(){},stopPropagation(){}});
+ capture('pointermove')({pointerId:8,clientX:90,clientY:90,preventDefault(){},stopPropagation(){}});assert.equal(pad.style.transform,'','A second finger cannot move the selected control');
+ capture('pointermove')({pointerId:7,clientX:40,clientY:-30,preventDefault(){},stopPropagation(){}});pad.fire('pointermove',{pointerId:7});capture('pointerup')({pointerId:7});assert(!pad.hasPointerCapture(7),'Editor releases pointer capture');
+ assert.equal(pad.style.transform,'translate(30px, -40px) scale(1)','Dragging moves the control');assert.equal(events.length,0,'Editing sends no keys');
+ elements['#editor-bigger'].onclick();assert.equal(pad.style.transform,'translate(30px, -40px) scale(1.1)','Resize grows the selected control');
  elements['#editor-hide'].onclick();assert(pad.classes.has('layout-hidden'),'Hide removes the control');
  elements['#editor-hide'].onclick();elements['#editor-done'].onclick();assert.equal(elements['#editor'].hidden,true);
  pad.fire('pointerdown',{pointerId:9,clientX:85,clientY:50});assert.deepEqual(events.at(-1),['keydown','KeyD'],'Controls work again after editing');pad.fire('pointerup',{pointerId:9});
  elements['#settings'].onclick();elements['#edit-layout'].onclick();elements['#editor-reset'].onclick();elements['#editor-done'].onclick();
- assert.equal(pad.style.translate,'','Reset restores the default layout');
+ assert.equal(pad.style.transform,'','Reset restores the default layout');
+ events.length=0;window.SSF2Pads.update([{id:3,name:'Controller',buttons:['select'],axes:[0,0,0,0]}]);assert(elements['#panel'].open,'Controller menu opens the panel');elements['#panel'].close();window.SSF2Pads.update([{id:3,name:'Controller',buttons:['select'],axes:[0,0,0,0]}]);assert(!elements['#panel'].open,'Holding menu does not reopen it');window.SSF2Pads.update([]);assert.equal(events.length,0);
+ elements['#settings'].onclick();elements['#fullscreen'].checked=false;elements['#fullscreen'].onchange();assert(!document.body.classes.has('fullscreen'));assert.equal(saved.fullscreen,false);
  console.log('PASS: diagonals, simultaneous actions, shared-key holds, sliding, cancellation, interruptions, settings, resume, controllers, native controllers, remapping, layout editor');
 })();

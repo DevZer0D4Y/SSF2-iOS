@@ -39,4 +39,21 @@ assert.deepEqual(calls.map(x => x[0]), ['texStorage2D', 'texSubImage2D', 'draw']
 const e = {id: 'e'}; gl.bindTexture(T2D, e); calls.length = 0;
 gl.texStorage2D(T2D, 1, 0x8058, 64, 64); gl.texSubImage2D(T2D, 0, 8, 8, 4, 4, 0x1908, 0x1401, new Uint8Array(64));
 assert.deepEqual(calls.map(x => x[0]), ['texStorage2D', 'texSubImage2D'], 'partial write allocates storage first');
-console.log('PASS: wgpu storage path;  deferral, byte-exact round trip, pixel-store replay, binding restore, render targets, partial updates', JSON.stringify(window.SSF2TextureStats));
+assert.equal(window.SSF2TextureStats.pendingBytes,0,'Draws consume all pending pixel buffers');
+// Replacing and deleting deferred allocations must free their packed bytes and logical bindings.
+const removed={};gl.bindTexture(T2D,removed);gl.texStorage2D(T2D,1,0x8058,64,64);gl.texSubImage2D(T2D,0,0,0,64,64,0x1908,0x1401,sprite);
+const firstSize=window.SSF2TextureStats.pendingBytes;assert(firstSize>0);
+gl.texSubImage2D(T2D,0,0,0,64,64,0x1908,0x1401,sprite);assert.equal(window.SSF2TextureStats.pendingBytes,firstSize,'Full replacements do not accumulate packed memory');
+gl.deleteTexture(removed);assert.equal(window.SSF2TextureStats.pendingBytes,0);calls.length=0;gl.drawArrays(4,0,3);assert.deepEqual(calls.map(c=>c[0]),['draw'],'Deleted bound textures never upload');
+// A small sprite view may point into a huge WASM heap. The deferred texture must not retain that heap.
+(async()=>{
+ assert.equal(typeof global.gc,'function','Run this suite with node --expose-gc');
+ let sourceHeap=new ArrayBuffer(32*1024*1024),view=new Uint8Array(sourceHeap,0,sprite.length);view.set(sprite);
+ const heapRef=new WeakRef(sourceHeap),retained={};gl.bindTexture(T2D,retained);gl.texImage2D(T2D,0,0x1908,64,64,0,0x1908,0x1401,view);
+ sourceHeap=null;view=null;
+ for(let i=0;i<8;i++){await new Promise(setImmediate);global.gc();}
+ assert.equal(heapRef.deref(),undefined,'Deferred texture releases the original WASM backing buffer');
+ calls.length=0;gl.drawArrays(4,0,3);assert.deepEqual(calls[0][2],sprite,'Upload remains byte-exact after the original heap is collected');
+ console.log('PASS: wgpu storage path;  deferral, byte-exact round trip, pixel-store replay, binding restore, render targets, partial updates', JSON.stringify(window.SSF2TextureStats));
+
+})();

@@ -21,6 +21,7 @@ YouTube: https://www.youtube.com/@develop_erZ
 - Native controller support through Apple's GameController framework, including extended gamepads and supported micro gamepads. Remap buttons in **CONTROLS**, or hide the touch deck while a controller is connected.
 - Customizable keyboard bindings that match the game's own Player 1 control settings.
 - Local game saves and control settings, automatic suspension when the app loses focus, and a tap-to-resume screen.
+- Fullscreen landscape play with overlay controls and an optional framed deck.
 - Deferred, compressed WebGL texture uploads to reduce the game's GPU memory use on iOS.
 
 ## Requirements
@@ -51,15 +52,27 @@ The touch controls operate Player 1. The game's own menus can be tapped directly
 | **SHIELD** | **I** | Shield / dodge |
 | **GRAB** | **U** | Grab |
 | **TAUNT** | **1** | Taunt |
-| **PAUSE** | **Enter** | Game pause (match the game’s Pause binding) |
+| **PAUSE** | **Space** | Game pause (match the game’s Pause binding) |
 | **START / OK** | **Space** | Confirm where the game accepts it |
-| **BACK** | **Escape** | Back where the game accepts it |
+| **MENU** | — | Open the app control panel and suspend the game |
 
 If you change the game's bindings in **Options → Controls**, change the matching keys in the port's **CONTROLS → KEYS** panel too. Keep **Tap Jump** enabled for the default Jump button, or assign a dedicated jump key in both places.
+
+The former Escape button is now **MENU**, which opens a working app menu. To exit a match, use the game’s pause menu. Under **DISPLAY**, fullscreen is enabled by default in landscape; turn it off to restore the framed deck. Portrait keeps the game above the controls.
 
 Under **TOUCH**, choose **EDIT TOUCH LAYOUT** to drag controls, resize the selected control, or hide it. **RESET** restores the layout. Portrait and landscape keep separate arrangements.
 
 Under **CONTROLLER**, assign each supported physical button to a game action. Controller availability depends on the controller profile exposed by iOS.
+
+## Changes since 1.1.2
+
+- Space is the default Pause key; existing Enter pause bindings migrate once.
+- MENU replaces the Escape-based Back button and suspends the runtime while settings are open.
+- D-pad editing captures the drag pointer, supports upward movement, and resets its transform correctly.
+- Fullscreen landscape play is enabled by default.
+- Deferred textures release their original pixel buffers, upload staging memory is reused, and recovery lowers rendering resolution.
+
+These changes are in the source; the released IPA remains 1.1.2.
 
 ## Status
 
@@ -71,7 +84,7 @@ Under **CONTROLLER**, assign each supported physical button to a game action. Co
 
 Known limitations:
 
-- Performance and Flash compatibility depend on Ruffle and the device. Some game content can still hit iOS memory limits. After repeated WebKit process termination, the app offers a retry instead of continuously reloading.
+- Performance and Flash compatibility depend on Ruffle and the device. Some game content can still hit iOS memory limits. Texture compression releases original bitmap buffers, and rendering resolution is capped to reduce effect-buffer memory. A memory warning or WebKit process termination enables persistent lower-memory rendering; repeated termination offers a retry. This mitigates memory pressure but does not guarantee every device or match will avoid a crash.
 - The app blocks remote game requests for offline operation. Online multiplayer and other network-dependent game features are not supported.
 - A downloaded IPA must be signed before installation. No signing certificate or provisioning profile is included.
 
@@ -98,7 +111,8 @@ The JavaScript checks need Node.js and do not need the game assets:
 
 ```sh
 node tests/touch-controls.cjs
-node tests/gpu-memory.cjs
+node --expose-gc tests/gpu-memory.cjs
+node tests/rendering.cjs
 python3 scripts/audit-source.py
 ```
 

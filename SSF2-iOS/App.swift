@@ -34,6 +34,7 @@ enum Log {
 final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
     private var webView: WKWebView!
     private var controllers: ControllerBridge?
+    private var lowMemory = UserDefaults.standard.bool(forKey: "SSF2LowMemoryMode")
     private let feedback = UIImpactFeedbackGenerator(style: .light)
     // Remote loads are refused so the game behaves the same with or without a connection.
     private static let offlineRules = #"[{"trigger":{"url-filter":"^https?://"},"action":{"type":"block"}},{"trigger":{"url-filter":"^wss?://"},"action":{"type":"block"}}]"#
@@ -83,7 +84,7 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
     }
 
     private func bridgeScript() -> String {
-        "window.SSF2Native = {};"
+        "window.SSF2Native = {lowMemory: \(lowMemory)};"
     }
 
     @objc private func suspendGame() {
@@ -126,23 +127,41 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
 
     private var lastTermination: Date?
 
-    // iOS ends the page's process when it runs out of memory. Reload once; if it keeps happening, stop instead of looping.
+    private func enableLowMemoryMode() {
+        lowMemory = true
+        UserDefaults.standard.set(true, forKey: "SSF2LowMemoryMode")
+        webView.configuration.userContentController.removeAllUserScripts()
+        webView.configuration.userContentController.addUserScript(WKUserScript(source: bridgeScript(), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        webView.evaluateJavaScript("window.SSF2Rendering?.lowerMemory()", completionHandler: nil)
+    }
+
+    override func didReceiveMemoryWarning() {
+        super.didReceiveMemoryWarning()
+        enableLowMemoryMode()
+    }
+
+    // A termination does not identify its cause. Retry once with smaller render buffers;
+    // repeated failures offer a deliberate restart instead of an automatic reload loop.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         let repeated = lastTermination.map { Date().timeIntervalSince($0) < 60 } ?? false
         lastTermination = Date()
         controllers?.pageReloaded()
-        Log.write("web content process terminated\(repeated ? " again; not reloading" : "; reloading")")
+        enableLowMemoryMode()
         if repeated {
-            showError("The game ran out of memory and was closed by iOS. Close other apps and try again.")
+            showError("The game process stopped again. Lower memory rendering is now enabled. Tap Retry to restart the game.")
         } else {
-            webView.reload()
+            webView.load(URLRequest(url: GameSchemeHandler.startURL))
         }
     }
 
     private func showError(_ message: String) {
         guard presentedViewController == nil else { return }
         let alert = UIAlertController(title: "Unable to start SSF2", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Retry", style: .default) { [weak self] _ in self?.webView?.load(URLRequest(url: GameSchemeHandler.startURL)) })
+        alert.addAction(UIAlertAction(title: "Retry", style: .default) { [weak self] _ in
+            guard let self else { return }
+            self.lastTermination = nil
+            self.webView.load(URLRequest(url: GameSchemeHandler.startURL))
+        })
         present(alert, animated: true)
     }
 

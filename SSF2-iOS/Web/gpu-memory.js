@@ -6,8 +6,8 @@
 (() => {
   const TEXTURE_2D = 0x0DE1, TEXTURE0 = 0x84C0, MIN_BYTES = 4096;
   const pending = new WeakMap(); // texture -> {args, packed, length, store}
-  let scratch = new Uint32Array(1 << 16);
-  const stats = window.SSF2TextureStats = {deferred: 0, uploaded: 0, rawBytes: 0, packedBytes: 0};
+  let scratch = new Uint32Array(1 << 16), decodeScratch = new Uint8Array(1 << 16);
+  const stats = window.SSF2TextureStats = {deferred: 0, uploaded: 0, rawBytes: 0, packedBytes: 0, pendingBytes: 0};
 
   // Words are 32-bit pixels. Tokens: count | 0x80000000 followed by one repeated word, or count followed by count literal words.
   function pack(bytes) {
@@ -25,11 +25,19 @@
       out[o++] = k - i;
       out.set(words.subarray(i, k), o); o += k - i; i = k;
     }
-    return out.slice(0, o);
+    const result=out.slice(0, o);
+    if(scratch.byteLength>4*1024*1024)scratch=new Uint32Array(1<<16);
+    return result;
   }
 
   function unpack(packed, length) {
-    const bytes = new Uint8Array(length), words = new Uint32Array(bytes.buffer, 0, length >> 2);
+    // Reuse a bounded staging buffer instead of allocating another full sprite on every upload.
+    let bytes;
+    if(length<=8*1024*1024){
+      if(decodeScratch.length<length)decodeScratch=new Uint8Array(length);
+      bytes=decodeScratch.subarray(0,length);
+    }else bytes=new Uint8Array(length);
+    const words = new Uint32Array(bytes.buffer, bytes.byteOffset, length >> 2);
     let o = 0;
     for (let i = 0; i < packed.length;) {
       const token = packed[i++], count = token & 0x7FFFFFFF;
@@ -38,6 +46,20 @@
     }
     return bytes;
   }
+
+  function dropPending(texture){
+    const entry=pending.get(texture);
+    if(entry?.pixels)stats.pendingBytes-=entry.pixels.packed.byteLength;
+    pending.delete(texture);
+  }
+  function setPending(texture,entry){
+    dropPending(texture);
+    pending.set(texture,entry);
+    if(entry.pixels)stats.pendingBytes+=entry.pixels.packed.byteLength;
+  }
+  window.addEventListener?.('ssf2-lowmemory',()=>{
+    scratch=new Uint32Array(1<<16);decodeScratch=new Uint8Array(1<<16);
+  });
 
   function install(proto) {
     const real = {};
@@ -52,25 +74,29 @@
     function upload(gl, texture) {
       const entry = pending.get(texture);
       if (!entry) return;
-      pending.delete(texture);
+      dropPending(texture);
       const s = state(gl), previous = s.bound.get(s.unit) || null;
       real.bindTexture.call(gl, TEXTURE_2D, texture);
       if (entry.storage) real.texStorage2D.apply(gl, entry.storage);
       if (entry.pixels) {
         // Replay with the pixel-store settings that were active when the call was made.
         const changed = [];
-        for (const [key, value] of entry.pixels.store) if (s.store.get(key) !== value) { changed.push(key); real.pixelStorei.call(gl, key, value); }
+        for (const [key, value] of entry.pixels.store) if (s.store.get(key) !== value) { changed.push([key,s.store.has(key)?s.store.get(key):real.getParameter.call(gl,key)]); real.pixelStorei.call(gl, key, value); }
         const args = entry.pixels.args.slice(); args[8] = unpack(entry.pixels.packed, entry.pixels.length);
         real[entry.pixels.call].apply(gl, args);
-        for (const key of changed) real.pixelStorei.call(gl, key, s.store.has(key) ? s.store.get(key) : real.getParameter.call(gl, key));
+        for (const [key,value] of changed) real.pixelStorei.call(gl, key, value);
         stats.uploaded++;
       }
       real.bindTexture.call(gl, TEXTURE_2D, previous);
     }
     function defer(gl, texture, entry, call, args) {
-      const data = args[8], packed = pack(data);
-      entry.pixels = {call, args, packed, length: data.byteLength, store: new Map(state(gl).store)};
-      pending.set(texture, entry);
+      const data = args[8], packed = pack(data), parameters=args.slice();
+      // A view into WASM memory can keep an entire old linear-memory allocation alive after growth.
+      // Keep only the compressed copy, never the original pixel view or its backing ArrayBuffer.
+      parameters[8]=null;
+      dropPending(texture);
+      entry.pixels = {call, args:parameters, packed, length: data.byteLength, store: new Map(state(gl).store)};
+      setPending(texture, entry);
       stats.deferred++; stats.rawBytes += data.byteLength; stats.packedBytes += packed.byteLength;
     }
     function uploadBound(gl) {
@@ -86,14 +112,14 @@
     proto.pixelStorei = function (key, value) { state(this).store.set(key, value); return real.pixelStorei.call(this, key, value); };
     proto.texImage2D = function (...args) {
       const texture = currentTexture(this);
-      if (args[0] === TEXTURE_2D && texture) pending.delete(texture);
+      if (args[0] === TEXTURE_2D && texture) dropPending(texture);
       if (args.length === 9 && args[0] === TEXTURE_2D && args[1] === 0 && texture && eligible(args[8])) return defer(this, texture, {}, 'texImage2D', args);
       return real.texImage2D.apply(this, args);
     };
     if (real.texStorage2D) proto.texStorage2D = function (...args) {
       const texture = currentTexture(this);
       // Single-level 2D storage is allocated when first needed (wgpu fills it with one full-size texSubImage2D).
-      if (args[0] === TEXTURE_2D && args[1] === 1 && texture && args[3] * args[4] * 4 >= MIN_BYTES) { pending.set(texture, {storage: args, width: args[3], height: args[4]}); return; }
+      if (args[0] === TEXTURE_2D && args[1] === 1 && texture && args[3] * args[4] * 4 >= MIN_BYTES) { setPending(texture, {storage: args.slice(), width: args[3], height: args[4]}); return; }
       return real.texStorage2D.apply(this, args);
     };
     proto.texSubImage2D = function (...args) {
@@ -103,11 +129,14 @@
       if (texture) upload(this, texture);
       return real.texSubImage2D.apply(this, args);
     };
-    proto.copyTexImage2D = function (...args) { const t = currentTexture(this); if (t) pending.delete(t); return real.copyTexImage2D.apply(this, args); };
+    proto.copyTexImage2D = function (...args) { const t = currentTexture(this); if (t) dropPending(t); return real.copyTexImage2D.apply(this, args); };
     proto.copyTexSubImage2D = function (...args) { const t = currentTexture(this); if (t) upload(this, t); return real.copyTexSubImage2D.apply(this, args); };
     proto.generateMipmap = function (...args) { const t = currentTexture(this); if (t) upload(this, t); return real.generateMipmap.apply(this, args); };
     proto.framebufferTexture2D = function (target, attachment, textarget, texture, level) { if (texture) upload(this, texture); return real.framebufferTexture2D.call(this, target, attachment, textarget, texture, level); };
-    proto.deleteTexture = function (texture) { if (texture) pending.delete(texture); return real.deleteTexture.call(this, texture); };
+    proto.deleteTexture = function (texture) {
+      if(texture){dropPending(texture);for(const [unit,bound] of state(this).bound)if(bound===texture)state(this).bound.set(unit,null);}
+      return real.deleteTexture.call(this, texture);
+    };
     for (const name of ['drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced']) {
       if (real[name]) proto[name] = function (...args) { uploadBound(this); return real[name].apply(this, args); };
     }

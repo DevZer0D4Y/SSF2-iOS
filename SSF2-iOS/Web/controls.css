@@ -42,3 +42,16 @@ body.gamepad #stage{left:max(10px,env(safe-area-inset-left));right:max(10px,env(
 }
 @media(orientation:portrait) and (max-width:380px){.left-deck,.right-deck{transform:scale(var(--size))}}
 @media(max-width:560px){#bindings,#pad-bindings{grid-template-columns:1fr}}
+
+/* Fullscreen canvas; touch controls float over the game without reserving side panels. */
+body.fullscreen #shell{background:#000}
+body.fullscreen #shell:before,body.fullscreen .brand,body.fullscreen .deck-label,body.fullscreen #runtime-status{display:none}
+body.fullscreen #stage,body.fullscreen.gamepad #stage{inset:0;height:auto}
+body.fullscreen #player-host{border:0;box-shadow:none;background:#000}
+body.fullscreen header{z-index:3;left:auto;border:0;height:40px;right:max(12px,env(safe-area-inset-right));top:max(6px,env(safe-area-inset-top))}
+body.fullscreen footer{z-index:3;border:0;justify-content:center;bottom:max(6px,env(safe-area-inset-bottom));height:30px}
+body.fullscreen .left-deck,body.fullscreen .right-deck{z-index:2;top:auto;bottom:calc(env(safe-area-inset-bottom) + 44px);transform:scale(var(--size));transform-origin:bottom center;opacity:calc(var(--opacity)*.75)}
+body.fullscreen #loading{border:0;padding-top:50px}
+body.editing [data-action],body.editing #dpad{cursor:move;touch-action:none}
+body.editing button:active{transform:none}
+@media(orientation:portrait){body.fullscreen #stage,body.fullscreen.gamepad #stage{top:calc(env(safe-area-inset-top) + 48px);bottom:auto;height:calc(100vw*9/16)}body.fullscreen .left-deck,body.fullscreen .right-deck{bottom:calc(env(safe-area-inset-bottom) + 54px)}}
