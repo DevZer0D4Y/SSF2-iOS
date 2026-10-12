@@ -32,7 +32,7 @@ YouTube: https://www.youtube.com/@develop_erZ
 
 ## Installation
 
-1. Download `SuperSmashFlash2-1.1.2-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
+1. Download `SuperSmashFlash2-1.1.3-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
 2. Sign and install it with your sideloading tool. With ESign, import the IPA, then sign and install it inside ESign.
 3. Open **Super Smash Flash 2** and tap **LET'S PLAY** to start the game and enable audio. Tap the game screen to navigate its menus.
 4. Open **CONTROLS** to adjust the touch deck or controller mapping.
@@ -64,7 +64,7 @@ Under **TOUCH**, choose **EDIT TOUCH LAYOUT** to drag controls, resize the selec
 
 Under **CONTROLLER**, assign each supported physical button to a game action. Controller availability depends on the controller profile exposed by iOS.
 
-## Changes since 1.1.2
+## Version 1.1.3 changes
 
 - Space is the default Pause key; existing Enter pause bindings migrate once.
 - MENU replaces the Escape-based Back button and suspends the runtime while settings are open.
@@ -72,13 +72,11 @@ Under **CONTROLLER**, assign each supported physical button to a game action. Co
 - Fullscreen landscape play is enabled by default.
 - Deferred textures release their original pixel buffers, upload staging memory is reused, and recovery lowers rendering resolution.
 
-These changes are in the source; the released IPA remains 1.1.2.
-
 ## Status
 
 | Component | Version |
 |---|---|
-| iOS app | **1.1.2**, build **5** |
+| iOS app | **1.1.3**, build **6** |
 | Portable game | **1.3.1.2** |
 | Ruffle | **0.6.0** |
 

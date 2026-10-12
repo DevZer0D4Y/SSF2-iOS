@@ -15,7 +15,11 @@ mkdir -p "$ROOT/build"
 STAGE="$(mktemp -d "$ROOT/build/package.XXXXXX")"
 trap 'rm -rf "$STAGE"' EXIT
 mkdir "$STAGE/Payload"
-ditto "$APP" "$STAGE/Payload/SSF2-iOS.app"
+# Clone resources on APFS to avoid duplicating the large game during packaging.
+if ! cp -cR "$APP" "$STAGE/Payload/SSF2-iOS.app" 2>/dev/null; then
+  rm -rf "$STAGE/Payload/SSF2-iOS.app"
+  ditto "$APP" "$STAGE/Payload/SSF2-iOS.app"
+fi
 # Remove debug symbols and their embedded local object/module paths.
 xcrun strip -S "$STAGE/Payload/SSF2-iOS.app/SSF2-iOS"
 # Asset downloads and Xcode can contain local metadata. Never ship it.
