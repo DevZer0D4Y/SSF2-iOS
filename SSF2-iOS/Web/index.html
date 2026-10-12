@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>SSF2 • Portable</title>
+  <link rel="stylesheet" href="controls.css">
+</head>
+<body>
+  <main id="shell">
+    <header><div class="brand"><strong>SSF<span>2</span></strong><div>SUPER SMASH FLASH <small>PORTABLE / iOS</small></div></div><div class="tools"><button id="settings" aria-label="Control settings">CONTROLS</button><button id="pause" data-action="pause">PAUSE</button></div></header>
+    <section id="stage" aria-label="Super Smash Flash 2 game"><div id="player-host"></div><div id="loading"><b>SUPER SMASH FLASH <em>2</em></b><p id="status">Loading game runtime…</p><button id="start" hidden>LET’S PLAY</button><button id="retry" hidden>RETRY</button></div></section>
+    <aside class="left-deck"><span class="deck-label">PLAYER <b>1</b></span><div id="dpad" role="group" aria-label="Eight-direction movement"><i class="dpad-cross"></i><span class="arrow up"></span><span class="arrow left"></span><span class="arrow right"></span><span class="arrow down"></span><i class="dpad-core"></i></div><button class="utility" data-action="taunt">TAUNT</button></aside>
+    <aside class="right-deck"><div class="shoulders"><button data-action="grab">GRAB</button><button data-action="shield">SHIELD</button></div><div class="actions"><button class="action jump" data-action="jump"><b>↑&#xFE0E;</b><span>JUMP</span></button><button class="action special" data-action="special"><b>B</b><span>SPECIAL</span></button><button class="action attack" data-action="attack"><b>A</b><span>ATTACK</span></button></div></aside>
+    <footer><span id="runtime-status">OFFLINE EDITION <i></i> v1.3.1.2</span><div><button class="utility" data-action="back">BACK</button><button class="utility" data-action="start">START / OK</button></div></footer>
+  </main>
+  <div id="editor" hidden><span>EDIT LAYOUT</span><b id="editor-selected">Tap a control</b><button id="editor-smaller" type="button" aria-label="Smaller">−</button><button id="editor-bigger" type="button" aria-label="Bigger">+</button><button id="editor-hide" type="button">HIDE</button><button id="editor-reset" type="button">RESET</button><button id="editor-done" type="button" class="save">DONE</button><small>Drag controls to move them. Each orientation keeps its own layout.</small></div>
+  <dialog id="panel"><form method="dialog"><div class="panel-title"><h1>CONTROL DECK</h1><button aria-label="Close settings">✕</button></div><h2>KEYS</h2><p>Player 1 · Match these keys to the game’s Options → Controls. Defaults use WASD, P / O / I / U.</p><div id="bindings"></div><h2>CONTROLLER</h2><p id="controller-status">No controller connected.</p><div id="pad-bindings"></div><label class="check"><input id="hide-deck" type="checkbox"> Hide touch controls while a controller is connected</label><h2>TOUCH</h2><button id="edit-layout" type="button" class="wide">EDIT TOUCH LAYOUT — MOVE, RESIZE, HIDE</button><label class="slider">Control size <input id="size" type="range" min="0.8" max="1.2" step="0.05"></label><label class="slider">Control opacity <input id="opacity" type="range" min="0.45" max="1" step="0.05"></label><label class="check"><input id="haptics" type="checkbox"> Touch feedback</label><div class="panel-bottom"><button id="reset" type="button">RESET DEFAULTS</button><button class="save">DONE</button></div></form></dialog>
+  <script>(()=>{
+    const config={publicPath:'ruffle/',autoplay:'off',unmuteOverlay:'hidden',warnOnUnsupportedContent:false,contextMenu:'off',showSwfDownload:false,letterbox:'on',backgroundColor:'#111111',allowScriptAccess:false,logLevel:'error',polyfills:false,splashScreen:false,backgroundExecutionMode:'none'};
+    // index.html?quality=low&renderer=webgl overrides player options (used for device tuning).
+    const params=new URLSearchParams(location.search);
+    for(const [param,option] of [['quality','quality'],['renderer','preferredRenderer'],['log','logLevel']])if(params.get(param))config[option]=params.get(param);
+    // Ruffle renders at devicePixelRatio; ?dpr=1 renders at CSS resolution and lets the browser scale it up.
+    const dpr=parseFloat(params.get('dpr'));
+    if(dpr>0)Object.defineProperty(window,'devicePixelRatio',{get:()=>dpr});
+    window.RufflePlayer={config};
+  })();</script>
+  <script src="gpu-memory.js"></script>
+  <script src="ruffle/ruffle.js"></script>
+  <script src="controls.js"></script>
+</body>
+</html>

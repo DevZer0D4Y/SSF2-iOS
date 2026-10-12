@@ -1,0 +1,27 @@
+# Generated game assets and runtime; restored by scripts/fetch-assets.py.
+SSF2-iOS/Web/game/
+SSF2-iOS/Web/ruffle/
+# Build products and local development state.
+build/
+dist/
+DerivedData/
+*.ipa
+*.app/
+*.dSYM/
+*.xcarchive/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+__pycache__/
+*.pyc
+*.log
+*.trace
+*.mobileprovision
+*.provisionprofile
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+.env.*
+*.local
