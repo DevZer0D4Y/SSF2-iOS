@@ -88,7 +88,7 @@ bash scripts/make-ipa.sh
 
 The downloader restores the original game and Ruffle into ignored folders and verifies every file against [`scripts/assets-manifest.json`](scripts/assets-manifest.json). The game is pinned to [`b3115cd`](https://github.com/VocalNutria9174/SSF2_Portable_Web/tree/b3115cd09c07fdce441d87e6d92e2f283f3432c4), and the runtime to [Ruffle 0.6.0](https://github.com/ruffle-rs/ruffle/releases/tag/v0.6.0).
 
-The build script writes `build/SuperSmashFlash2-unsigned.ipa`. Set `OUT` and `DERIVED` to choose different output and build directories. Packaging strips debug symbols and embedded local build paths, and removes source maps, Finder metadata, provisioning profiles, and signature files.
+The build script writes `build/SuperSmashFlash2-unsigned.ipa`. Set `OUT` and `DERIVED` to choose different output and build directories. Packaging strips debug symbols and embedded local build paths, removes source maps, Finder metadata, provisioning profiles, and signature files, and audits the final IPA.
 
 For a signed build, restore the assets, open `SSF2-iOS.xcodeproj` in Xcode, choose your team in **Signing & Capabilities**, then build for your device.
 

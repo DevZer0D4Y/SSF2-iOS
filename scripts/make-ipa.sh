@@ -26,4 +26,5 @@ rm -f "$STAGE/Payload/SSF2-iOS.app/embedded.mobileprovision"
 mkdir -p "$(dirname "$OUT")"
 (cd "$STAGE" && zip -qry "$STAGE/release.ipa" Payload)
 mv "$STAGE/release.ipa" "$OUT"
+python3 "$ROOT/scripts/audit-ipa.py" "$OUT"
 echo "IPA: $OUT"
