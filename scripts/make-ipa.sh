@@ -16,6 +16,8 @@ STAGE="$(mktemp -d "$ROOT/build/package.XXXXXX")"
 trap 'rm -rf "$STAGE"' EXIT
 mkdir "$STAGE/Payload"
 ditto "$APP" "$STAGE/Payload/SSF2-iOS.app"
+# Remove debug symbols and their embedded local object/module paths.
+xcrun strip -S "$STAGE/Payload/SSF2-iOS.app/SSF2-iOS"
 # Asset downloads and Xcode can contain local metadata. Never ship it.
 find "$STAGE" -name '.DS_Store' -delete
 find "$STAGE" -name '*.map' -delete
