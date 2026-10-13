@@ -32,7 +32,7 @@ YouTube: https://www.youtube.com/@develop_erZ
 
 ## Installation
 
-1. Download `SuperSmashFlash2-1.1.3-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
+1. Download `SuperSmashFlash2-1.1.4-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
 2. Sign and install it with your sideloading tool. With ESign, import the IPA, then sign and install it inside ESign.
 3. Open **Super Smash Flash 2** and tap **LET'S PLAY** to start the game and enable audio. Tap the game screen to navigate its menus.
 4. Open **CONTROLS** to adjust the touch deck or controller mapping.
@@ -64,6 +64,14 @@ Under **TOUCH**, choose **EDIT TOUCH LAYOUT** to drag controls, resize the selec
 
 Under **CONTROLLER**, assign each supported physical button to a game action. Controller availability depends on the controller profile exposed by iOS.
 
+## Version 1.1.4 changes
+
+- Compressed sprites are paged to session-only native disk storage, reducing the JavaScript heap used during startup and character/stage loading.
+- Static sprite textures use a GPU cache targeting 128 MB, 96 MB on low-memory startup, and 64 MB after a memory warning. Inactive textures reload through stable handles when used again.
+- Render targets, mipmaps and partially modified textures remain outside eviction so cached originals cannot overwrite gameplay effects.
+
+The scratch cache is discarded on app exit and reuses freed storage. Keep at least **1 GB of free device storage** for normal play; long sessions may need more. If storage is unavailable, compression falls back to RAM, which may again hit WebKit memory limits. The cache limits static sprite residency, not all game memory. Ruffle still retains some movie resources, and this release needs testing on affected physical iPhones. A native macOS WebKit integration test reached a Ness battle, returned to character selection, switched to Link and another stage, and reached the next battle without a process termination or sprite-cache error.
+
 ## Version 1.1.3 changes
 
 - Space is the default Pause key; existing Enter pause bindings migrate once.
@@ -76,7 +84,7 @@ Under **CONTROLLER**, assign each supported physical button to a game action. Co
 
 | Component | Version |
 |---|---|
-| iOS app | **1.1.3**, build **6** |
+| iOS app | **1.1.4**, build **7** |
 | Portable game | **1.3.1.2** |
 | Ruffle | **0.6.0** |
 
@@ -111,7 +119,16 @@ The JavaScript checks need Node.js and do not need the game assets:
 node tests/touch-controls.cjs
 node --expose-gc tests/gpu-memory.cjs
 node tests/rendering.cjs
+node tests/gpu-cache.cjs
+node tests/gpu-cache.cjs --disk
 python3 scripts/audit-source.py
+```
+
+The native cache can be checked on macOS with:
+
+```sh
+xcrun swiftc SSF2-iOS/TextureStore.swift tests/texture-store.swift -o /tmp/ssf2-texture-tests
+/tmp/ssf2-texture-tests
 ```
 
 ## Source layout
@@ -119,6 +136,7 @@ python3 scripts/audit-source.py
 | Path | Contents |
 |---|---|
 | [`SSF2-iOS/App.swift`](SSF2-iOS/App.swift) | iOS app lifecycle, audio, WebKit setup, suspension, and recovery |
+| [`SSF2-iOS/TextureStore.swift`](SSF2-iOS/TextureStore.swift) | Session-only native sprite storage |
 | [`SSF2-iOS/GameSchemeHandler.swift`](SSF2-iOS/GameSchemeHandler.swift) | Offline bundled asset loader |
 | [`SSF2-iOS/ControllerBridge.swift`](SSF2-iOS/ControllerBridge.swift) | Native gamepad input bridge |
 | [`SSF2-iOS/Web/`](SSF2-iOS/Web/) | Game shell, touch controls, controller remapping, layout editor, and GPU memory handling |

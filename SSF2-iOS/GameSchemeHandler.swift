@@ -29,7 +29,7 @@ final class GameSchemeHandler: NSObject, WKURLSchemeHandler {
             DispatchQueue.main.async {
                 // WebKit raises if a stopped task is answered, so only reply to tasks still in flight.
                 guard self.active.removeValue(forKey: id) === task, let url = request.url else { return }
-                let headers = ["Content-Type": mime, "Content-Length": String(data.count), "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"]
+                let headers = ["Content-Type": mime, "Content-Length": String(data.count), "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"]
                 task.didReceive(HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!)
                 if request.httpMethod != "HEAD", !data.isEmpty { task.didReceive(data) }
                 task.didFinish()

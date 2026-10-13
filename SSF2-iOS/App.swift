@@ -34,6 +34,7 @@ enum Log {
 final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
     private var webView: WKWebView!
     private var controllers: ControllerBridge?
+    private let textures = TextureStore()
     private var lowMemory = UserDefaults.standard.bool(forKey: "SSF2LowMemoryMode")
     private let feedback = UIImpactFeedbackGenerator(style: .light)
     // Remote loads are refused so the game behaves the same with or without a connection.
@@ -84,7 +85,7 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
     }
 
     private func bridgeScript() -> String {
-        "window.SSF2Native = {lowMemory: \(lowMemory)};"
+        "window.SSF2Native = {lowMemory: \(lowMemory), textureCache:true};"
     }
 
     @objc private func suspendGame() {
@@ -115,6 +116,17 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
         Log.write("external link \(url.absoluteString)")
         guard ["http", "https", "mailto"].contains(url.scheme?.lowercased()) else { return }
         UIApplication.shared.open(url)
+    }
+
+    // Synchronous, data-only sprite paging; unrelated prompts are refused.
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+        guard prompt == "SSF2TextureCache", frame.isMainFrame,
+              frame.securityOrigin.protocol == GameSchemeHandler.scheme,
+              frame.securityOrigin.host == GameSchemeHandler.host, let message = defaultText else {
+            completionHandler(nil); return
+        }
+        let result = autoreleasepool { textures.respond(message) }
+        completionHandler(result)
     }
 
     // A fresh page has no controller state yet.
