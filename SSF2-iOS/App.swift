@@ -6,8 +6,15 @@ import WebKit
 final class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Game audio should play even when the ring/silent switch is on.
-        do { try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default) } catch { Log.write("audio session: \(error.localizedDescription)") }
+        Self.activateAudio()
         return true
+    }
+    static func activateAudio() {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            if session.category != .playback || session.mode != .default { try session.setCategory(.playback, mode: .default) }
+            try session.setActive(true)
+        } catch { Log.write("audio session: \(error.localizedDescription)") }
     }
 }
 
@@ -37,9 +44,7 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
     private let textures = TextureStore()
     private var lowMemory = UserDefaults.standard.bool(forKey: "SSF2LowMemoryMode")
     private let feedback = UIImpactFeedbackGenerator(style: .light)
-    private let recovery = UIView()
-    private let recoveryText = UILabel()
-    private let restart = UIButton(type: .system)
+    private let recovery = RecoveryView(frame: .zero)
     private static let offlineRules = #"[{"trigger":{"url-filter":"^https?://"},"action":{"type":"block"}},{"trigger":{"url-filter":"^wss?://"},"action":{"type":"block"}}]"#
     override var prefersStatusBarHidden: Bool { true }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
@@ -53,40 +58,23 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
         UIApplication.shared.isIdleTimerDisabled = true
         feedback.prepare()
         NotificationCenter.default.addObserver(self, selector: #selector(suspendGame), name: UIApplication.willResignActiveNotification, object: nil)
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(activateAudio), name: UIApplication.didBecomeActiveNotification, object: nil)
+        center.addObserver(self, selector: #selector(audioRouteChanged(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
+        center.addObserver(self, selector: #selector(audioInterrupted(_:)), name: AVAudioSession.interruptionNotification, object: nil)
         createGameView()
     }
 
     private func configureRecovery() {
-        recovery.translatesAutoresizingMaskIntoConstraints = false
         recovery.backgroundColor = view.backgroundColor
         recovery.isHidden = true
-        recoveryText.font = .preferredFont(forTextStyle: .body)
-        recoveryText.textColor = .white
-        recoveryText.numberOfLines = 0
-        recoveryText.textAlignment = .center
-        recoveryText.adjustsFontForContentSizeCategory = true
-        var style = UIButton.Configuration.filled()
-        style.title = "Restart game"
-        style.baseBackgroundColor = UIColor(red: 0.97, green: 0.86, blue: 0.35, alpha: 1)
-        style.baseForegroundColor = .black
-        style.cornerStyle = .capsule
-        restart.configuration = style
-        restart.addTarget(self, action: #selector(restartGame), for: .touchUpInside)
-        let stack = UIStackView(arrangedSubviews: [recoveryText, restart])
-        stack.axis = .vertical; stack.spacing = 24
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        recovery.addSubview(stack); view.addSubview(recovery)
+        recovery.onRestart = { [weak self] in self?.restartGame() }
+        view.addSubview(recovery)
         NSLayoutConstraint.activate([
             recovery.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             recovery.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             recovery.topAnchor.constraint(equalTo: view.topAnchor),
-            recovery.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            stack.centerXAnchor.constraint(equalTo: recovery.centerXAnchor),
-            stack.centerYAnchor.constraint(equalTo: recovery.centerYAnchor),
-            stack.widthAnchor.constraint(lessThanOrEqualToConstant: 420),
-            stack.leadingAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
-            restart.heightAnchor.constraint(greaterThanOrEqualToConstant: 48)
+            recovery.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
     }
 
@@ -96,6 +84,7 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
             page.navigationDelegate = nil; page.uiDelegate = nil
             page.configuration.userContentController.removeScriptMessageHandler(forName: "haptic")
             page.configuration.userContentController.removeScriptMessageHandler(forName: "gameFailure")
+            page.configuration.userContentController.removeScriptMessageHandler(forName: "audioSession")
             page.configuration.userContentController.removeAllUserScripts()
             page.stopLoading(); page.removeFromSuperview()
         }
@@ -116,7 +105,7 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
         let content = configuration.userContentController
-        content.add(self, name: "haptic"); content.add(self, name: "gameFailure")
+        content.add(self, name: "haptic"); content.add(self, name: "gameFailure"); content.add(self, name: "audioSession")
         content.addUserScript(WKUserScript(source: bridgeScript(), injectionTime: .atDocumentStart, forMainFrameOnly: true))
         let page = WKWebView(frame: view.bounds, configuration: configuration)
         webView = page
@@ -138,8 +127,7 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
                 page.load(URLRequest(url: GameSchemeHandler.startURL))
                 DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self, weak page] in
                     guard let self, let page, self.webView === page, !self.recovery.isHidden else { return }
-                    self.restart.isEnabled = true
-                    self.recoveryText.text = "Loading is taking longer than expected. Tap Restart game to retry."
+                    self.recovery.message = "Loading is taking longer than expected. Tap Restart game to retry."
                 }
             }
         }
@@ -151,12 +139,33 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
     @objc private func suspendGame() {
         webView?.evaluateJavaScript("window.SSF2Controls?.suspend()", completionHandler: nil)
     }
+    @objc private func activateAudio() {
+        AppDelegate.activateAudio()
+        webView?.evaluateJavaScript("window.SSF2Audio?.unlock()", completionHandler: nil)
+    }
+    @objc private func audioRouteChanged(_ notification: Notification) {
+        guard let value = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: value) else { return }
+        DispatchQueue.main.async { [weak self] in
+            if reason == .oldDeviceUnavailable { self?.suspendGame() }
+            else if reason == .newDeviceAvailable || reason == .routeConfigurationChange { self?.activateAudio() }
+        }
+    }
+    @objc private func audioInterrupted(_ notification: Notification) {
+        guard let value = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: value) else { return }
+        DispatchQueue.main.async { [weak self] in
+            if type == .began { self?.suspendGame() }
+            else { self?.activateAudio() }
+        }
+    }
     private func trusted(_ frame: WKFrameInfo) -> Bool {
         frame.isMainFrame && frame.securityOrigin.protocol == GameSchemeHandler.scheme && frame.securityOrigin.host == GameSchemeHandler.host
     }
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let page = webView, controller === page.configuration.userContentController, trusted(message.frameInfo) else { return }
         switch message.name {
+        case "audioSession": if message.body as? String == "activate" { AppDelegate.activateAudio() }
         case "haptic": feedback.impactOccurred(intensity: 0.65); feedback.prepare()
         case "gameFailure":
             guard let reason = message.body as? String, ["graphics-lost", "sprite-cache-read"].contains(reason) else { return }
@@ -187,7 +196,7 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         guard webView === self.webView else { return }
         controllers?.pageReloaded()
-        recovery.isHidden = true; restart.isEnabled = true
+        recovery.isHidden = true
     }
     private func navigationFailed(_ page: WKWebView, error: Error) {
         guard page === webView, (error as NSError).code != NSURLErrorCancelled else { return }
@@ -216,13 +225,13 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
         showRecovery("The game stopped. Restart to return to the main menu. The current match cannot be recovered.")
     }
     private func showRecovery(_ message: String) {
-        recoveryText.text = message; restart.isEnabled = true
+        recovery.message = message
         recovery.isHidden = false; view.bringSubviewToFront(recovery)
         discardGameView()
     }
     @objc private func restartGame() {
-        restart.isEnabled = false
-        recoveryText.text = "Restarting game…"
+        recovery.message = "Reloading the title screen…"
+        AppDelegate.activateAudio()
         createGameView()
     }
 }

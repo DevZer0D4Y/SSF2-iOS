@@ -18,7 +18,7 @@
   <div id="editor" hidden><span>EDIT LAYOUT</span><b id="editor-selected">Tap a control</b><button id="editor-smaller" type="button" aria-label="Smaller">−</button><button id="editor-bigger" type="button" aria-label="Bigger">+</button><button id="editor-hide" type="button">HIDE</button><button id="editor-reset" type="button">RESET</button><button id="editor-done" type="button" class="save">DONE</button><small>Drag controls to move them. Each orientation keeps its own layout.</small></div>
   <dialog id="panel"><form method="dialog"><div class="panel-title"><h1>CONTROL DECK</h1><button aria-label="Close settings">✕</button></div><h2>KEYS</h2><p>Player 1 · Match these keys to the game’s Options → Controls. Defaults use WASD, P / O / I / U.</p><div id="bindings"></div><h2>CONTROLLER</h2><p id="controller-status">No controller connected.</p><div id="pad-bindings"></div><label class="check"><input id="hide-deck" type="checkbox"> Hide touch controls while a controller is connected</label><h2>DISPLAY</h2><label class="check"><input id="fullscreen" type="checkbox"> Fullscreen game with overlay controls</label><h2>TOUCH</h2><button id="edit-layout" type="button" class="wide">EDIT TOUCH LAYOUT — MOVE, RESIZE, HIDE</button><label class="slider">Control size <input id="size" type="range" min="0.8" max="1.2" step="0.05"></label><label class="slider">Control opacity <input id="opacity" type="range" min="0.45" max="1" step="0.05"></label><label class="check"><input id="haptics" type="checkbox"> Touch feedback</label><div class="panel-bottom"><button id="reset" type="button">RESET DEFAULTS</button><button class="save">DONE</button></div></form></dialog>
   <script>(()=>{
-    const config={publicPath:'ruffle/',autoplay:'off',unmuteOverlay:'hidden',warnOnUnsupportedContent:false,contextMenu:'off',showSwfDownload:false,letterbox:'on',backgroundColor:'#111111',allowScriptAccess:false,logLevel:'error',polyfills:false,splashScreen:false,backgroundExecutionMode:'none',quality:'medium'};
+    const config={publicPath:'ruffle/',autoplay:'off',unmuteOverlay:'visible',warnOnUnsupportedContent:false,contextMenu:'off',showSwfDownload:false,letterbox:'on',backgroundColor:'#111111',allowScriptAccess:false,logLevel:'error',polyfills:false,splashScreen:false,backgroundExecutionMode:'none',quality:'medium'};
     // index.html?quality=low&renderer=webgl overrides player options (used for device tuning).
     const params=new URLSearchParams(location.search);
     for(const [param,option] of [['quality','quality'],['renderer','preferredRenderer'],['log','logLevel']])if(params.get(param))config[option]=params.get(param);
@@ -39,6 +39,7 @@
     }};
     window.RufflePlayer={config};
   })();</script>
+  <script src="audio.js"></script>
   <script src="gpu-memory.js"></script>
   <script src="ruffle/ruffle.js"></script>
   <script src="controls.js"></script>

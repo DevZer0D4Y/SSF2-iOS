@@ -116,7 +116,7 @@
   panel.addEventListener('close',()=>{save();if(editing)return;if(wasPlaying)player.ruffle().resume();if(ready)player.focus();});
   document.querySelector('#reset').onclick=()=>{settings={bindingVersion:2,fullscreen:true,keys:{...defaults},pad:{...padDefaults},layout:settings.layout,size:1,opacity:1,haptics:true,hideDeck:true};save();renderSettings();};
   const loading=document.querySelector('#loading'),status=document.querySelector('#status'),start=document.querySelector('#start');
-  start.onclick=()=>{player.ruffle().resume();player.ruffle().volume=1;player.focus();loading.hidden=true;};
+  start.onclick=()=>{window.SSF2Audio?.unlock();player.ruffle().volume=1;player.ruffle().resume();player.focus();loading.hidden=true;};
   document.querySelector('#retry').onclick=()=>location.reload();
   async function boot(){
     try{

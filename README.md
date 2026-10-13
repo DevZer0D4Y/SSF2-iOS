@@ -32,7 +32,7 @@ YouTube: https://www.youtube.com/@develop_erZ
 
 ## Installation
 
-1. Download `SuperSmashFlash2-1.1.5-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
+1. Download `SuperSmashFlash2-1.1.6-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
 2. Sign and install it with your sideloading tool. With ESign, import the IPA, then sign and install it inside ESign.
 3. Open **Super Smash Flash 2** and tap **LET'S PLAY** to start the game and enable audio. Tap the game screen to navigate its menus.
 4. Open **CONTROLS** to adjust the touch deck or controller mapping.
@@ -64,6 +64,15 @@ Under **TOUCH**, choose **EDIT TOUCH LAYOUT** to drag controls, resize the selec
 
 Under **CONTROLLER**, assign each supported physical button to a game action. Controller availability depends on the controller profile exposed by iOS.
 
+## Version 1.1.6 changes
+
+- User taps and key presses explicitly resume Ruffle's Web Audio contexts. Starting the game loop alone does not unlock sound. The Ruffle unmute overlay is visible as a fallback.
+- The native playback audio session is activated, and headphone route changes, app activation and audio interruptions are handled.
+- The native Restart game button has a definite layout width and remains enabled while a replacement page loads. Rapid duplicate taps are ignored briefly rather than disabling the button.
+- The shipped recovery-view component was tapped twice successfully in a UIKit Mac Catalyst test app. Audio unlock, interruption and retry logic passed automated tests; headphone output still needs checking on affected iPhones.
+
+Restart recreates the Flash runtime and returns to the title screen. It cannot resume a match from a terminated WebKit process. Completed save data and control settings remain in the persistent store. These changes do not establish that the earlier memory-related crashes are eliminated.
+
 ## Version 1.1.5 changes
 
 - A native **Restart game** screen handles WebKit termination, graphics-context loss and sprite-cache read failures, including failures while the app is in the background.
@@ -92,7 +101,7 @@ The scratch cache is discarded on app exit and reuses freed storage. Keep at lea
 
 | Component | Version |
 |---|---|
-| iOS app | **1.1.5**, build **8** |
+| iOS app | **1.1.6**, build **9** |
 | Portable game | **1.3.1.2** |
 | Ruffle | **0.6.0** |
 
@@ -130,6 +139,7 @@ node tests/rendering.cjs
 node tests/gpu-cache.cjs
 node tests/gpu-cache.cjs --disk
 node tests/gpu-recovery.cjs
+node tests/audio.cjs
 python3 scripts/audit-source.py
 ```
 
@@ -145,6 +155,7 @@ xcrun swiftc SSF2-iOS/TextureStore.swift tests/texture-store.swift -o /tmp/ssf2-
 | Path | Contents |
 |---|---|
 | [`SSF2-iOS/App.swift`](SSF2-iOS/App.swift) | iOS app lifecycle, audio, WebKit setup, suspension, and recovery |
+| [`SSF2-iOS/RecoveryView.swift`](SSF2-iOS/RecoveryView.swift) | Native restart control |
 | [`SSF2-iOS/TextureStore.swift`](SSF2-iOS/TextureStore.swift) | Session-only native sprite storage |
 | [`SSF2-iOS/GameSchemeHandler.swift`](SSF2-iOS/GameSchemeHandler.swift) | Offline bundled asset loader |
 | [`SSF2-iOS/ControllerBridge.swift`](SSF2-iOS/ControllerBridge.swift) | Native gamepad input bridge |
