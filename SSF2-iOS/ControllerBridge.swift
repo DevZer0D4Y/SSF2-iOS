@@ -20,6 +20,12 @@ final class ControllerBridge {
         controllersChanged()
     }
 
+    func stop() {
+        link?.invalidate(); link = nil
+        webView = nil
+        NotificationCenter.default.removeObserver(self)
+    }
+
     @objc private func controllersChanged() {
         let names = GCController.controllers().map { $0.vendorName ?? "Controller" }
         Log.write("controllers: \(names.isEmpty ? "none" : names.joined(separator: ", "))")

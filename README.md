@@ -32,7 +32,7 @@ YouTube: https://www.youtube.com/@develop_erZ
 
 ## Installation
 
-1. Download `SuperSmashFlash2-1.1.4-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
+1. Download `SuperSmashFlash2-1.1.5-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
 2. Sign and install it with your sideloading tool. With ESign, import the IPA, then sign and install it inside ESign.
 3. Open **Super Smash Flash 2** and tap **LET'S PLAY** to start the game and enable audio. Tap the game screen to navigate its menus.
 4. Open **CONTROLS** to adjust the touch deck or controller mapping.
@@ -64,6 +64,14 @@ Under **TOUCH**, choose **EDIT TOUCH LAYOUT** to drag controls, resize the selec
 
 Under **CONTROLLER**, assign each supported physical button to a game action. Controller availability depends on the controller profile exposed by iOS.
 
+## Version 1.1.5 changes
+
+- A native **Restart game** screen handles WebKit termination, graphics-context loss and sprite-cache read failures, including failures while the app is in the background.
+- Restart disposes the old WebView, stops its controller polling and creates a fresh game page. Temporary sprites are cleared; the persistent save-data store stays in use.
+- Failed loads allow a retry; repeated failures require a deliberate restart rather than an automatic reload loop.
+
+There is **no play-time limit**. Free storage and RAM/graphics memory are different resources. This release improves recovery from a blank screen; it does not prove that every underlying crash has been eliminated. A restarted match is lost.
+
 ## Version 1.1.4 changes
 
 - Compressed sprites are paged to session-only native disk storage, reducing the JavaScript heap used during startup and character/stage loading.
@@ -84,7 +92,7 @@ The scratch cache is discarded on app exit and reuses freed storage. Keep at lea
 
 | Component | Version |
 |---|---|
-| iOS app | **1.1.4**, build **7** |
+| iOS app | **1.1.5**, build **8** |
 | Portable game | **1.3.1.2** |
 | Ruffle | **0.6.0** |
 
@@ -121,6 +129,7 @@ node --expose-gc tests/gpu-memory.cjs
 node tests/rendering.cjs
 node tests/gpu-cache.cjs
 node tests/gpu-cache.cjs --disk
+node tests/gpu-recovery.cjs
 python3 scripts/audit-source.py
 ```
 

@@ -64,10 +64,15 @@
     }
     return {packed,diskId:null,packedLength:packed.byteLength};
   }
+  let failureReported=false;
+  function reportFailure(reason){
+    if(failureReported)return;failureReported=true;
+    window.webkit?.messageHandlers?.gameFailure?.postMessage(reason);
+  }
   function readPixels(pixels){
     if(!pixels.diskId)return pixels.packed;
     const encoded=cacheRequest({op:'get',id:pixels.diskId});
-    if(encoded===null)throw new Error('Sprite cache read failed. Restart the game.');
+    if(encoded===null){reportFailure('sprite-cache-read');throw new Error('Sprite cache read failed. Restart the game.');}
     const text=atob(encoded),bytes=new Uint8Array(text.length);
     for(let i=0;i<text.length;i++)bytes[i]=text.charCodeAt(i);
     return new Uint32Array(bytes.buffer);
@@ -227,7 +232,10 @@
     const context = getContext.call(this, type, ...rest);
     if (context && /webgl/.test(type) && !this.__ssf2Watched) {
       this.__ssf2Watched = true;
-      this.addEventListener('webglcontextlost', () => console.error(`WebGL context lost (${this.width}x${this.height}, ${JSON.stringify(stats)})`));
+      this.addEventListener('webglcontextlost', () => {
+        reportFailure('graphics-lost');
+        console.error(`WebGL context lost (${this.width}x${this.height}, ${JSON.stringify(stats)})`);
+      });
     }
     return context;
   };
