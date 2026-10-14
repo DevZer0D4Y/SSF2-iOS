@@ -22,12 +22,13 @@ class GL{
 }
 const diskMode=process.argv.includes('--disk'),blobs=new Map();let serial=0;
 const window={SSF2Native:{textureCache:diskMode},prompt(name,message){assert.equal(name,'SSF2TextureCache');const r=JSON.parse(message);if(r.op==='reset'){blobs.clear();return 'ok';}if(r.op==='put'){const id=String(++serial);blobs.set(id,r.data);return id;}if(r.op==='get')return blobs.get(r.id)??null;if(r.op==='drop'){blobs.delete(r.id);return 'ok';}},WebGLRenderingContext:GL,addEventListener:(name,fn)=>(events[name]??=[]).push(fn)};
+if(process.argv.includes('--low-memory'))window.SSF2Native={...window.SSF2Native,lowMemory:true};
 vm.runInNewContext(fs.readFileSync(__dirname+'/../SSF2-iOS/Web/gpu-memory.js','utf8'),{window,HTMLCanvasElement:class{},location:{search:''},URLSearchParams,Uint8Array,Uint32Array,Map,WeakMap,Set,btoa:s=>Buffer.from(s,'binary').toString('base64'),atob:s=>Buffer.from(s,'base64').toString('binary')});
 const gl=new GL(),textures=[],pixels=new Uint8Array(1024*1024*4);pixels.fill(23);
 for(let i=0;i<48;i++){
  const t=gl.createTexture();textures.push(t);gl.bindTexture(T,t);gl.texParameteri(T,0x2801,0x2600);
  gl.texStorage2D(T,1,0x8058,1024,1024);gl.texSubImage2D(T,0,0,0,1024,1024,RGBA,BYTE,pixels);gl.drawArrays();
- assert(gl.bytes()<=128*1024*1024,'Changing sprites never grows the cached GPU working set past 128 MB');
+ assert(gl.bytes()<=(process.argv.includes('--low-memory')?64:128)*1024*1024,'Changing sprites respects the configured GPU budget');
 }
 assert(window.SSF2TextureStats.evictions>=16);assert(gl.isTexture(textures[0]),'Eviction preserves the logical handle');
 gl.bindTexture(T,textures[0]);gl.drawArrays();const restored=gl.bindings.get(0);

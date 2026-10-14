@@ -18,10 +18,25 @@ const window={RufflePlayer:{newest:()=>({createPlayer:()=>player})},addEventList
 const gamepads=[],frames=[];let saved;const initial={keys:{pause:'Enter',jump:'KeyV'},pad:{select:'back'}};document.body=new Element();
 const context={window,document,localStorage:{getItem(){return JSON.stringify(initial);},setItem(key,value){saved=JSON.parse(value);}},KeyboardEvent:class{constructor(type,opts){this.type=type;Object.assign(this,opts);}},Option:class{},location:{reload(){}},navigator:{getGamepads:()=>gamepads},requestAnimationFrame:fn=>frames.push(fn)};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../SSF2-iOS/Web/controls.js'),'utf8'),context);
+if(process.argv.includes('--native'))window.SSF2Native={lowMemory:true,textureCache:true};
 (async()=>{
  await new Promise(setImmediate);assert.equal(saved.keys.pause,'Space');assert.equal(saved.keys.jump,'KeyV');assert.equal(saved.pad.select,'menu');assert(document.body.classes.has('fullscreen'));
+ // A background event before LET'S PLAY must not replace the initial start card.
+ window.SSF2Controls.suspend();assert.notEqual(elements['#start'].textContent,'RESUME');
  // Restore jump for the shared-key input checks.
  elements['#settings'].onclick();const jumpRow=elements['#bindings'].children.find(r=>r.children[0]==='Jump / tap jump');jumpRow.children[1].value='KeyW';jumpRow.children[1].onchange();elements['#panel'].close();elements['#start'].onclick();assert.equal(api.isPlaying,true);
+ // Synchronous cache dialogs/audio focus can briefly hide a native page; only the
+ // native app-background event may show Resume. Browser builds still use visibility.
+ for(let i=0;i<100;i++){
+   document.hidden=true;windowEvents['document-visibilitychange']();
+   assert.equal(api.isPlaying,!!window.SSF2Native,'Native transient visibility must not stop playback');
+   document.hidden=false;windowEvents['document-visibilitychange']();
+   if(!window.SSF2Native)elements['#start'].onclick();
+   windowEvents.blur();assert.equal(api.isPlaying,true,'Blur releases input without pausing playback');
+ }
+ api.isPlaying=false; // Ruffle may already have paused itself before the native callback.
+ window.SSF2Controls.suspend();assert.equal(elements['#loading'].hidden,false,'Backgrounding still offers Resume after Ruffle auto-pauses');
+ elements['#start'].onclick();assert.equal(api.isPlaying,true,'A single resume restarts playback');
  const pad=elements['#dpad'],jump=buttons[0],attack=buttons[1];
  for(const action of ['pause','start']){events.length=0;const b=buttons.find(b=>b.dataset.action===action);b.fire('pointerdown');b.fire('pointerup');assert.deepEqual(events,[['keydown','Space'],['keyup','Space']]);}events.length=0;
  buttons.at(-1).fire('pointerdown');assert(elements['#panel'].open);assert.equal(api.isPlaying,false);assert.equal(events.length,0);elements['#panel'].close();

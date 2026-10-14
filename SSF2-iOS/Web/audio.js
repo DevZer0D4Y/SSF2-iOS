@@ -3,9 +3,9 @@
 (() => {
   'use strict';
   const contexts=new Set(),resuming=new WeakSet();
+  // Set policy before Ruffle creates an output, rather than changing audio focus on taps.
+  try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch{}
   function unlock(){
-    if([...contexts].some(c=>c.state!=='running'&&c.state!=='closed'&&!resuming.has(c)))window.webkit?.messageHandlers?.audioSession?.postMessage('activate');
-    try{if(navigator.audioSession&&navigator.audioSession.type!=='playback')navigator.audioSession.type='playback';}catch{}
     const tasks=[];
     for(const context of contexts){
       if(context.state==='closed'){contexts.delete(context);continue;}
@@ -21,7 +21,6 @@
     window[name]=new Proxy(Original,{construct(target,args,newTarget){
       const context=Reflect.construct(target,args,newTarget);contexts.add(context);
       context.addEventListener('statechange',()=>{if(context.state==='closed')contexts.delete(context);});
-      if(navigator.userActivation?.isActive)void unlock();
       return context;
     }});
   }

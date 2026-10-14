@@ -20,7 +20,7 @@ YouTube: https://www.youtube.com/@develop_erZ
 - **Customizable touch layouts**: move, resize, and hide controls, with separate layouts for portrait and landscape.
 - Native controller support through Apple's GameController framework, including extended gamepads and supported micro gamepads. Remap buttons in **CONTROLS**, or hide the touch deck while a controller is connected.
 - Customizable keyboard bindings that match the game's own Player 1 control settings.
-- Local game saves and control settings, automatic suspension when the app loses focus, and a tap-to-resume screen.
+- Local game saves and control settings, automatic suspension when the app enters the background, and a tap-to-resume screen.
 - Fullscreen landscape play with overlay controls and an optional framed deck.
 - Deferred, compressed WebGL texture uploads to reduce the game's GPU memory use on iOS.
 
@@ -32,7 +32,7 @@ YouTube: https://www.youtube.com/@develop_erZ
 
 ## Installation
 
-1. Download `SuperSmashFlash2-1.1.6-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
+1. Download `SuperSmashFlash2-1.1.7-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
 2. Sign and install it with your sideloading tool. With ESign, import the IPA, then sign and install it inside ESign.
 3. Open **Super Smash Flash 2** and tap **LET'S PLAY** to start the game and enable audio. Tap the game screen to navigate its menus.
 4. Open **CONTROLS** to adjust the touch deck or controller mapping.
@@ -63,6 +63,14 @@ The former Escape button is now **MENU**, which opens a working app menu. To exi
 Under **TOUCH**, choose **EDIT TOUCH LAYOUT** to drag controls, resize the selected control, or hide it. **RESET** restores the layout. Portrait and landscape keep separate arrangements.
 
 Under **CONTROLLER**, assign each supported physical button to a game action. Controller availability depends on the controller profile exposed by iOS.
+
+## Version 1.1.7 changes
+
+- Audio interruptions, headphone route changes and transient inactivity no longer show the game's Resume screen. On iOS, app backgrounding owns suspension; temporary WebKit visibility changes do not pause the runtime.
+- Removed the audio activation feedback path. Playback policy is set before audio starts, and user input still unlocks suspended Web Audio contexts. Foreground entry activates the native audio session once, without repeatedly reacting to route notifications.
+- Repeated suspension is harmless, and background events before the first start do not replace LET'S PLAY with Resume.
+- New installations start with lower-memory rendering, including CSS-resolution output and low quality. The lower-memory sprite cache now targets 64 MB instead of 96 MB to reduce startup pressure.
+- A UIKit Mac Catalyst check of the shipped native controller passed 1,000 trusted sprite-cache prompts and 500 transient lifecycle/audio notifications without pausing, followed by background suspension and one-tap resume. JavaScript checks cover visibility changes, pending audio resumes and the reduced cache budget. Startup termination on affected physical iPhones still needs verification; lower memory use does not guarantee every crash is resolved.
 
 ## Version 1.1.6 changes
 
@@ -101,7 +109,7 @@ The scratch cache is discarded on app exit and reuses freed storage. Keep at lea
 
 | Component | Version |
 |---|---|
-| iOS app | **1.1.6**, build **9** |
+| iOS app | **1.1.7**, build **10** |
 | Portable game | **1.3.1.2** |
 | Ruffle | **0.6.0** |
 
@@ -124,7 +132,7 @@ bash scripts/make-ipa.sh
 
 The downloader restores the original game and Ruffle into ignored folders and verifies every file against [`scripts/assets-manifest.json`](scripts/assets-manifest.json). The game is pinned to [`b3115cd`](https://github.com/VocalNutria9174/SSF2_Portable_Web/tree/b3115cd09c07fdce441d87e6d92e2f283f3432c4), and the runtime to [Ruffle 0.6.0](https://github.com/ruffle-rs/ruffle/releases/tag/v0.6.0).
 
-The build script writes `build/SuperSmashFlash2-unsigned.ipa`. Set `OUT` and `DERIVED` to choose different output and build directories. Packaging strips debug symbols and embedded local build paths, removes source maps, Finder metadata, provisioning profiles, and signature files, and audits the final IPA.
+The build script writes `build/SuperSmashFlash2-unsigned.ipa`. Set `OUT` and `DERIVED` to choose different output and build directories. The script excludes the large Web folder from Xcode’s resource-copy phase and clones it directly into the package on APFS. Packaging strips debug symbols and embedded local build paths, removes source maps, Finder metadata, provisioning profiles, and signature files, and audits the final IPA.
 
 For a signed build, restore the assets, open `SSF2-iOS.xcodeproj` in Xcode, choose your team in **Signing & Capabilities**, then build for your device.
 
@@ -134,10 +142,12 @@ The JavaScript checks need Node.js and do not need the game assets:
 
 ```sh
 node tests/touch-controls.cjs
+node tests/touch-controls.cjs --native
 node --expose-gc tests/gpu-memory.cjs
 node tests/rendering.cjs
 node tests/gpu-cache.cjs
 node tests/gpu-cache.cjs --disk
+node tests/gpu-cache.cjs --disk --low-memory
 node tests/gpu-recovery.cjs
 node tests/audio.cjs
 python3 scripts/audit-source.py

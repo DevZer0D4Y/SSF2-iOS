@@ -107,7 +107,7 @@
     // Weak maps let discarded movie handles and their compressed copies be collected.
     const cache = new WeakMap(), aliases = new WeakMap(), reverse = new WeakMap(), parameters = new WeakMap();
     // Each WebGL context owns its own resident set; handles cannot move between contexts.
-    let budget = (window.SSF2Native?.lowMemory ? 96 : 128) * 1024 * 1024;
+    let budget = (window.SSF2Native?.lowMemory ? 64 : 128) * 1024 * 1024;
     function physical(gl,texture){
       if(!texture||!aliases.has(texture))return texture;
       let actual=aliases.get(texture);

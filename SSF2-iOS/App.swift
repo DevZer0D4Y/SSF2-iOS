@@ -42,7 +42,7 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
     private var webView: WKWebView?
     private var controllers: ControllerBridge?
     private let textures = TextureStore()
-    private var lowMemory = UserDefaults.standard.bool(forKey: "SSF2LowMemoryMode")
+    private var lowMemory = (UserDefaults.standard.object(forKey: "SSF2LowMemoryMode") as? Bool) ?? true
     private let feedback = UIImpactFeedbackGenerator(style: .light)
     private let recovery = RecoveryView(frame: .zero)
     private static let offlineRules = #"[{"trigger":{"url-filter":"^https?://"},"action":{"type":"block"}},{"trigger":{"url-filter":"^wss?://"},"action":{"type":"block"}}]"#
@@ -57,11 +57,11 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
         configureRecovery()
         UIApplication.shared.isIdleTimerDisabled = true
         feedback.prepare()
-        NotificationCenter.default.addObserver(self, selector: #selector(suspendGame), name: UIApplication.willResignActiveNotification, object: nil)
+        // Transient inactivity and audio-session changes are not app backgrounding.
+        // In particular, WebKit's synchronous sprite requests must never pause the runtime.
         let center = NotificationCenter.default
-        center.addObserver(self, selector: #selector(activateAudio), name: UIApplication.didBecomeActiveNotification, object: nil)
-        center.addObserver(self, selector: #selector(audioRouteChanged(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
-        center.addObserver(self, selector: #selector(audioInterrupted(_:)), name: AVAudioSession.interruptionNotification, object: nil)
+        center.addObserver(self, selector: #selector(suspendGame), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        center.addObserver(self, selector: #selector(activateAudio), name: UIApplication.willEnterForegroundNotification, object: nil)
         createGameView()
     }
 
@@ -84,7 +84,6 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
             page.navigationDelegate = nil; page.uiDelegate = nil
             page.configuration.userContentController.removeScriptMessageHandler(forName: "haptic")
             page.configuration.userContentController.removeScriptMessageHandler(forName: "gameFailure")
-            page.configuration.userContentController.removeScriptMessageHandler(forName: "audioSession")
             page.configuration.userContentController.removeAllUserScripts()
             page.stopLoading(); page.removeFromSuperview()
         }
@@ -105,7 +104,7 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
         let content = configuration.userContentController
-        content.add(self, name: "haptic"); content.add(self, name: "gameFailure"); content.add(self, name: "audioSession")
+        content.add(self, name: "haptic"); content.add(self, name: "gameFailure")
         content.addUserScript(WKUserScript(source: bridgeScript(), injectionTime: .atDocumentStart, forMainFrameOnly: true))
         let page = WKWebView(frame: view.bounds, configuration: configuration)
         webView = page
@@ -140,24 +139,9 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
         webView?.evaluateJavaScript("window.SSF2Controls?.suspend()", completionHandler: nil)
     }
     @objc private func activateAudio() {
+        // Activate once on foreground entry. Web Audio resumes on the next user gesture;
+        // route/interruption notifications must not feed activation back into themselves.
         AppDelegate.activateAudio()
-        webView?.evaluateJavaScript("window.SSF2Audio?.unlock()", completionHandler: nil)
-    }
-    @objc private func audioRouteChanged(_ notification: Notification) {
-        guard let value = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
-              let reason = AVAudioSession.RouteChangeReason(rawValue: value) else { return }
-        DispatchQueue.main.async { [weak self] in
-            if reason == .oldDeviceUnavailable { self?.suspendGame() }
-            else if reason == .newDeviceAvailable || reason == .routeConfigurationChange { self?.activateAudio() }
-        }
-    }
-    @objc private func audioInterrupted(_ notification: Notification) {
-        guard let value = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
-              let type = AVAudioSession.InterruptionType(rawValue: value) else { return }
-        DispatchQueue.main.async { [weak self] in
-            if type == .began { self?.suspendGame() }
-            else { self?.activateAudio() }
-        }
     }
     private func trusted(_ frame: WKFrameInfo) -> Bool {
         frame.isMainFrame && frame.securityOrigin.protocol == GameSchemeHandler.scheme && frame.securityOrigin.host == GameSchemeHandler.host
@@ -165,7 +149,6 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let page = webView, controller === page.configuration.userContentController, trusted(message.frameInfo) else { return }
         switch message.name {
-        case "audioSession": if message.body as? String == "activate" { AppDelegate.activateAudio() }
         case "haptic": feedback.impactOccurred(intensity: 0.65); feedback.prepare()
         case "gameFailure":
             guard let reason = message.body as? String, ["graphics-lost", "sprite-cache-read"].contains(reason) else { return }
@@ -231,7 +214,6 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
     }
     @objc private func restartGame() {
         recovery.message = "Reloading the title screen…"
-        AppDelegate.activateAudio()
         createGameView()
     }
 }

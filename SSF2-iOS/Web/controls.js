@@ -86,8 +86,10 @@
   ['pointerup','pointercancel','lostpointercapture'].forEach(type=>pad.addEventListener(type,e=>{setPointer(e.pointerId,[]);padTouches.delete(e.pointerId);paintPad();}));
   function suspend(){releaseAll();padTouches.clear();paintPad();}
   window.addEventListener('blur',suspend);
-  function suspendGame(){suspend();if(ready){player.ruffle().suspend();loading.hidden=false;status.textContent='Game suspended. Tap to continue.';start.textContent='RESUME';start.hidden=false;}}
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)suspendGame();});
+  function suspendGame(){suspend();if(ready&&loading.hidden){wasPlaying=false;player.ruffle().suspend();loading.hidden=false;status.textContent='Game suspended. Tap to continue.';start.textContent='RESUME';start.hidden=false;}}
+  // Native lifecycle owns suspension on iOS. WebKit visibility can change during
+  // synchronous sprite-cache prompts without the app actually entering the background.
+  document.addEventListener('visibilitychange',()=>{if(document.hidden&&!window.SSF2Native)suspendGame();});
   window.addEventListener('orientationchange',suspend);
   window.addEventListener('pagehide',suspend);
   window.addEventListener('contextmenu',e=>e.preventDefault());
