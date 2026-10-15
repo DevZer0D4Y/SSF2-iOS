@@ -13,14 +13,24 @@ final class GameSchemeHandler: NSObject, WKURLSchemeHandler {
     /// Called on the main thread after each request with its path, status and body size.
     var onResponse: ((String, Int, Int) -> Void)?
     private let root: URL
+    private let textures: TextureStore?
     private let queue = DispatchQueue(label: "ssf2.assets", qos: .userInitiated, attributes: .concurrent)
     private var active: [ObjectIdentifier: WKURLSchemeTask] = [:]
 
-    init(root: URL) {
+    init(root: URL, textures: TextureStore? = nil) {
+        self.textures = textures
         self.root = root.standardizedFileURL.resolvingSymlinksInPath()
     }
 
     func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
+        if task.request.url?.path.hasPrefix("/__ssf2_texture/") == true {
+            let (status, data) = textures?.respond(task.request) ?? (503, Data())
+            guard let url = task.request.url else { return }
+            task.didReceive(HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: ["Content-Type":"application/octet-stream", "Cache-Control":"no-store", "Content-Length":String(data.count)])!)
+            if !data.isEmpty { task.didReceive(data) }
+            task.didFinish()
+            return
+        }
         let id = ObjectIdentifier(task)
         active[id] = task
         let request = task.request

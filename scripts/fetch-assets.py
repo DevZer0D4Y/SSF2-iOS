@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Restore checksum-pinned assets into ignored folders before building."""
 from pathlib import Path
-import hashlib, io, json, shutil, tarfile, urllib.request, zipfile
+import hashlib, io, json, shutil, subprocess, sys, tarfile, urllib.request, zipfile
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / 'SSF2-iOS' / 'Web'
 MANIFEST = json.loads((ROOT / 'scripts' / 'assets-manifest.json').read_text())
@@ -33,9 +33,15 @@ def save(name, stream):
     finally:
         temporary.unlink(missing_ok=True)
 
+def prepare_ios_movie():
+    subprocess.run([sys.executable, str(ROOT / 'scripts' / 'patch-game.py'),
+                    str(WEB / 'game' / 'SSF2Portable.swf'),
+                    str(WEB / 'game' / 'SSF2Portable-ios.swf')], check=True)
+
 def main():
     missing = {name for name in MANIFEST if not valid(name)}
     if not missing:
+        prepare_ios_movie()
         print('All pinned game and runtime assets verified.')
         return
     wanted = {name for name in missing if name.startswith('game/')}
@@ -64,6 +70,7 @@ def main():
             for name in sorted(wanted):
                 with archive.open(name.removeprefix('ruffle/')) as stream:
                     save(name, stream)
+    prepare_ios_movie()
     print('Pinned assets restored and verified.')
 
 if __name__ == '__main__':

@@ -50,36 +50,47 @@
 
   // Move compressed sprites out of WebKit's heap on iOS. Reads remain synchronous because
   // WebGL draw calls cannot await an asynchronous database lookup.
-  let disk=false;
-  try{disk=window.SSF2Native?.textureCache && window.prompt?.('SSF2TextureCache',JSON.stringify({op:'reset'}))==='ok';}catch{}
-  function cacheRequest(request){return window.prompt('SSF2TextureCache',JSON.stringify(request));}
-  function storePixels(packed){
-    if(disk){
-      try{
-        const bytes=new Uint8Array(packed.buffer,packed.byteOffset,packed.byteLength),chunks=[];
-        for(let i=0;i<bytes.length;i+=16384)chunks.push(String.fromCharCode(...bytes.subarray(i,i+16384)));
-        const id=cacheRequest({op:'put',data:btoa(chunks.join(''))});
-        if(id && /^\d+$/.test(id)){stats.diskBytes+=packed.byteLength;return {packed:null,diskId:id,packedLength:packed.byteLength};}
-      }catch{}
-    }
-    return {packed,diskId:null,packedLength:packed.byteLength};
-  }
   let failureReported=false;
   function reportFailure(reason){
     if(failureReported)return;failureReported=true;
     window.webkit?.messageHandlers?.gameFailure?.postMessage(reason);
   }
+  function cacheRequest(op,data,id){
+    const xhr=new XMLHttpRequest();
+    xhr.open(op==='get'?'GET':'POST','/__ssf2_texture/'+op+(id?'/'+id:''),false);
+    // Main-thread synchronous XHR only permits text responses. x-user-defined preserves
+    // all byte values without JSON/base64 expansion or JavaScript modal dialogs.
+    if(op==='get')xhr.overrideMimeType('text/plain; charset=x-user-defined');
+    xhr.send(data||null);
+    if(xhr.status!==200)throw new Error('Sprite cache '+op+' failed ('+xhr.status+')');
+    if(op!=='get')return xhr.responseText;
+    const text=xhr.responseText,bytes=new Uint8Array(text.length);
+    for(let i=0;i<text.length;i++)bytes[i]=text.charCodeAt(i)&255;
+    return bytes;
+  }
+  let disk=false;
+  if(window.SSF2Native?.textureCache){
+    try{disk=cacheRequest('reset')==='ok';}catch{}
+    if(!disk){reportFailure('sprite-cache-unavailable');throw new Error('Native sprite cache is unavailable. Restart the game.');}
+  }
+  function storePixels(packed){
+    if(disk){
+      try{
+        const bytes=new Uint8Array(packed.buffer,packed.byteOffset,packed.byteLength),id=cacheRequest('put',bytes);
+        if(!/^\d+$/.test(id))throw new Error('Invalid sprite identifier');
+        stats.diskBytes+=packed.byteLength;return {packed:null,diskId:id,packedLength:packed.byteLength};
+      }catch(error){reportFailure('sprite-cache-write');throw error;}
+    }
+    return {packed,diskId:null,packedLength:packed.byteLength};
+  }
   function readPixels(pixels){
     if(!pixels.diskId)return pixels.packed;
-    const encoded=cacheRequest({op:'get',id:pixels.diskId});
-    if(encoded===null){reportFailure('sprite-cache-read');throw new Error('Sprite cache read failed. Restart the game.');}
-    const text=atob(encoded),bytes=new Uint8Array(text.length);
-    for(let i=0;i<text.length;i++)bytes[i]=text.charCodeAt(i);
-    return new Uint32Array(bytes.buffer);
+    try{return new Uint32Array(cacheRequest('get',null,pixels.diskId).buffer);}
+    catch(error){reportFailure('sprite-cache-read');throw error;}
   }
   function releasePixels(entry){
     const pixels=entry?.pixels;
-    if(pixels?.diskId){cacheRequest({op:'drop',id:pixels.diskId});stats.diskBytes-=pixels.packedLength;pixels.diskId=null;}
+    if(pixels?.diskId){cacheRequest('drop',null,pixels.diskId);stats.diskBytes-=pixels.packedLength;pixels.diskId=null;}
   }
   function dropPending(texture,discard=false){
     const entry=pending.get(texture);

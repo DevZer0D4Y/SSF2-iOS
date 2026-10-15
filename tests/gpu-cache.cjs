@@ -21,9 +21,14 @@ class GL{
  bytes(){return [...this.textures.values()].reduce((sum,t)=>sum+(t.bytes?.length||0),0);}
 }
 const diskMode=process.argv.includes('--disk'),blobs=new Map();let serial=0;
-const window={SSF2Native:{textureCache:diskMode},prompt(name,message){assert.equal(name,'SSF2TextureCache');const r=JSON.parse(message);if(r.op==='reset'){blobs.clear();return 'ok';}if(r.op==='put'){const id=String(++serial);blobs.set(id,r.data);return id;}if(r.op==='get')return blobs.get(r.id)??null;if(r.op==='drop'){blobs.delete(r.id);return 'ok';}},WebGLRenderingContext:GL,addEventListener:(name,fn)=>(events[name]??=[]).push(fn)};
+class XHR {
+ open(method,url,sync){assert.equal(sync,false);this.op=url.split('/')[2];this.id=url.split('/')[3];this.method=method;}
+ overrideMimeType(mime){assert(mime.includes('x-user-defined'));}
+ send(data){this.status=200;if(this.op==='reset'){blobs.clear();this.responseText='ok';}if(this.op==='put'){assert(data instanceof Uint8Array);this.responseText=String(++serial);blobs.set(this.responseText,Buffer.from(data));}if(this.op==='get'){const b=blobs.get(this.id);this.status=b?200:507;this.responseText=b?b.toString('binary'):'';}if(this.op==='drop'){blobs.delete(this.id);this.responseText='ok';}}
+}
+const window={SSF2Native:{textureCache:diskMode},prompt(){throw Error('Modal prompts must never be used for sprites');},WebGLRenderingContext:GL,addEventListener:(name,fn)=>(events[name]??=[]).push(fn)};
 if(process.argv.includes('--low-memory'))window.SSF2Native={...window.SSF2Native,lowMemory:true};
-vm.runInNewContext(fs.readFileSync(__dirname+'/../SSF2-iOS/Web/gpu-memory.js','utf8'),{window,HTMLCanvasElement:class{},location:{search:''},URLSearchParams,Uint8Array,Uint32Array,Map,WeakMap,Set,btoa:s=>Buffer.from(s,'binary').toString('base64'),atob:s=>Buffer.from(s,'base64').toString('binary')});
+vm.runInNewContext(fs.readFileSync(__dirname+'/../SSF2-iOS/Web/gpu-memory.js','utf8'),{window,XMLHttpRequest:XHR,HTMLCanvasElement:class{},location:{search:''},URLSearchParams,Uint8Array,Uint32Array,Map,WeakMap,Set,btoa:s=>Buffer.from(s,'binary').toString('base64'),atob:s=>Buffer.from(s,'base64').toString('binary')});
 const gl=new GL(),textures=[],pixels=new Uint8Array(1024*1024*4);pixels.fill(23);
 for(let i=0;i<48;i++){
  const t=gl.createTexture();textures.push(t);gl.bindTexture(T,t);gl.texParameteri(T,0x2801,0x2600);

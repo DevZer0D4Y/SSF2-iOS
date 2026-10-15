@@ -124,7 +124,7 @@
     try{
       player=window.RufflePlayer.newest().createPlayer();player.tabIndex=0;
       document.querySelector('#player-host').append(player);
-      await player.ruffle().load({url:'game/SSF2Portable.swf',base:'game/',autoplay:'off',allowScriptAccess:false});
+      await player.ruffle().load({url:window.SSF2Native?'game/SSF2Portable-ios.swf':'game/SSF2Portable.swf',base:'game/',autoplay:'off',allowScriptAccess:false});
       ready=true;status.textContent='Ready. Tap to enable sound and play.';start.hidden=false;
     }catch(error){status.textContent='The game could not load. '+String(error.message||error);document.querySelector('#retry').hidden=false;}
   }

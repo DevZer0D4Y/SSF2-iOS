@@ -24,6 +24,22 @@ import Foundation
         assert(store.respond("invalid JSON") == nil)
         assert(call(["op":"reset"]) == "ok")
         assert(call(["op":"get", "id":second]) == nil)
+        func binary(_ method: String, _ path: String, _ body: Data? = nil) -> (Int, Data) {
+            var request = URLRequest(url: URL(string: "ssf2://localhost/__ssf2_texture/" + path)!)
+            request.httpMethod = method; request.httpBody = body
+            return store.respond(request)
+        }
+        let bytes = Data((0...255).map(UInt8.init))
+        assert(binary("POST", "reset").0 == 200)
+        let (status, key) = binary("POST", "put", bytes)
+        assert(status == 200)
+        let id = String(data: key, encoding: .utf8)!
+        assert(binary("GET", "get/" + id).1 == bytes)
+        assert(binary("POST", "drop/" + id).0 == 200)
+        assert(binary("GET", "get/" + id).0 != 200)
+        assert(binary("POST", "put").0 == 400)
+        assert(binary("GET", "reset").0 == 400)
+        assert(store.respond(URLRequest(url: URL(string: "https://example.com/__ssf2_texture/reset")!)).0 == 403)
         print("PASS: native sprite storage, exact reads, freed slot reuse, invalid requests and session reset")
     }
 }

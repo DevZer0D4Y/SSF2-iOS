@@ -20,8 +20,15 @@ class CacheGL {
  texImage2D(){}texSubImage2D(){}deleteTexture(){}framebufferTexture2D(){}
  copyTexImage2D(){}copyTexSubImage2D(){}generateMipmap(){}drawArrays(){}drawElements(){}
 }
-const cacheFailures=[],cacheWindow={SSF2Native:{textureCache:true},WebGLRenderingContext:CacheGL,webkit:{messageHandlers:{gameFailure:{postMessage:r=>cacheFailures.push(r)}}},prompt(name,body){const r=JSON.parse(body);return r.op==='reset'?'ok':r.op==='put'?'1':null;}};
-vm.runInNewContext(fs.readFileSync(__dirname+'/../SSF2-iOS/Web/gpu-memory.js','utf8'),{window:cacheWindow,HTMLCanvasElement:class{},location:{search:''},URLSearchParams,Uint8Array,Uint32Array,Map,WeakMap,Set,btoa:s=>Buffer.from(s,'binary').toString('base64')});
+const cacheFailures=[],cacheWindow={SSF2Native:{textureCache:true},WebGLRenderingContext:CacheGL,webkit:{messageHandlers:{gameFailure:{postMessage:r=>cacheFailures.push(r)}}}};
+let fail='get';
+class XHR {
+ open(method,url){this.op=url.split('/')[2];}overrideMimeType(){}
+ send(){this.status=this.op===fail?507:200;this.responseText=this.op==='reset'?'ok':'1';}
+}
+function loadCache(){vm.runInNewContext(fs.readFileSync(__dirname+'/../SSF2-iOS/Web/gpu-memory.js','utf8'),{window:cacheWindow,XMLHttpRequest:XHR,HTMLCanvasElement:class{},location:{search:''},URLSearchParams,Uint8Array,Uint32Array,Map,WeakMap,Set});}
+loadCache();
 const gl=new CacheGL();gl.bindTexture(0x0DE1,{});gl.texImage2D(0x0DE1,0,0x1908,32,32,0,0x1908,0x1401,new Uint8Array(4096));
-assert.throws(()=>gl.drawArrays(4,0,3),/Sprite cache read failed/);assert.deepEqual(cacheFailures,['sprite-cache-read']);
-console.log('PASS: sprite-cache read failure notifies native recovery');
+assert.throws(()=>gl.drawArrays(4,0,3),/Sprite cache get failed/);assert.deepEqual(cacheFailures,['sprite-cache-read']);
+fail='reset';cacheFailures.length=0;assert.throws(loadCache,/Native sprite cache is unavailable/);assert.deepEqual(cacheFailures,['sprite-cache-unavailable'],'Unavailable native storage cannot silently fall back to an unbounded RAM cache');
+console.log('PASS: binary sprite-cache failures notify native recovery without modal dialogs');

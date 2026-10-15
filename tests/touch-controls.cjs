@@ -12,15 +12,16 @@ class Element {
   contains(t){return t===this;}close(){this.open=false;this.fire('close');}querySelector(sel){return elements[sel]??=new Element();}append(...args){this.children.push(...args);}replaceChildren(){this.children=[];}setAttribute(){}add(){}focus(){}showModal(){this.open=true;}
 }
 const elements={};const actions=['jump','attack','special','grab','shield','taunt','pause','start','menu'];const buttons=actions.map(a=>new Element(a));
-const events=[],windowEvents={};const api={isPlaying:false,load:async()=>{},resume(){this.isPlaying=true;},suspend(){this.isPlaying=false;}};const player=new Element();player.ruffle=()=>api;
+const events=[],windowEvents={};const api={isPlaying:false,load:async options=>{api.loadedURL=options.url;},resume(){this.isPlaying=true;},suspend(){this.isPlaying=false;}};const player=new Element();player.ruffle=()=>api;
 const document={documentElement:new Element(),hidden:false,querySelector:sel=>elements[sel]??=new Element(),querySelectorAll:sel=>sel==='[data-action]'?buttons:[],addEventListener(type,fn){windowEvents['document-'+type]=fn;},createElement:()=>new Element()};
 const window={RufflePlayer:{newest:()=>({createPlayer:()=>player})},addEventListener:(type,fn)=>windowEvents[type]=fn,dispatchEvent:e=>events.push([e.type,e.code])};
+if(process.argv.includes('--native'))window.SSF2Native={lowMemory:true,textureCache:true};
 const gamepads=[],frames=[];let saved;const initial={keys:{pause:'Enter',jump:'KeyV'},pad:{select:'back'}};document.body=new Element();
 const context={window,document,localStorage:{getItem(){return JSON.stringify(initial);},setItem(key,value){saved=JSON.parse(value);}},KeyboardEvent:class{constructor(type,opts){this.type=type;Object.assign(this,opts);}},Option:class{},location:{reload(){}},navigator:{getGamepads:()=>gamepads},requestAnimationFrame:fn=>frames.push(fn)};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../SSF2-iOS/Web/controls.js'),'utf8'),context);
-if(process.argv.includes('--native'))window.SSF2Native={lowMemory:true,textureCache:true};
 (async()=>{
  await new Promise(setImmediate);assert.equal(saved.keys.pause,'Space');assert.equal(saved.keys.jump,'KeyV');assert.equal(saved.pad.select,'menu');assert(document.body.classes.has('fullscreen'));
+ assert.equal(api.loadedURL,window.SSF2Native?'game/SSF2Portable-ios.swf':'game/SSF2Portable.swf','Native builds use the derived sequential-loader movie');
  // A background event before LET'S PLAY must not replace the initial start card.
  window.SSF2Controls.suspend();assert.notEqual(elements['#start'].textContent,'RESUME');
  // Restore jump for the shared-key input checks.
@@ -52,9 +53,10 @@ if(process.argv.includes('--native'))window.SSF2Native={lowMemory:true,textureCa
  windowEvents.blur();assert.deepEqual(events.at(-1),['keyup','KeyD'],'Interruption releases all held keys');
  events.length=0;pad.fire('pointerdown',{pointerId:5,clientX:50,clientY:50});assert.equal(events.length,0,'Center dead zone');
  elements['#settings'].onclick();assert.equal(api.isPlaying,false);assert.equal(elements['#panel'].open,true);
- elements['#panel'].fire('close');assert.equal(api.isPlaying,true,'Closing settings resumes a running game');
+ elements['#panel'].close();assert.equal(api.isPlaying,true,'Closing settings resumes a running game');
  window.SSF2Controls.suspend();assert.equal(api.isPlaying,false);assert.equal(elements['#loading'].hidden,false);assert.equal(elements['#start'].textContent,'RESUME');
  const frame=()=>frames.splice(0).forEach(fn=>fn());
+ if(!window.SSF2Native){
  const gamepad={buttons:Array.from({length:17},()=>({pressed:false})),axes:[0,0]};gamepads.push(gamepad);
  elements['#panel'].open=false;events.length=0;windowEvents.gamepadconnected();gamepad.buttons[0].pressed=true;frame();
  assert.equal(api.isPlaying,true,'A controller button resumes from the pause card');assert.equal(elements['#loading'].hidden,true);
@@ -67,6 +69,7 @@ if(process.argv.includes('--native'))window.SSF2Native={lowMemory:true,textureCa
  events.length=0;gamepad.buttons[13].pressed=true;frame();windowEvents.gamepaddisconnected();
  assert.deepEqual(events,[['keydown','KeyS'],['keyup','KeyS']],'Disconnecting releases held controller input');
  gamepads.length=0;frame();assert(!document.body.classes.has('gamepad'));
+ }else{elements['#start'].onclick();}
  // Native controller bridge (GameController framework on iOS)
  events.length=0;window.SSF2Pads.update([{id:0,name:'Xbox Wireless Controller',buttons:['south'],axes:[0,0,0,0]}]);
  assert.deepEqual(events,[['keydown','KeyP']],'Native bottom face button attacks');

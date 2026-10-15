@@ -32,7 +32,7 @@ YouTube: https://www.youtube.com/@develop_erZ
 
 ## Installation
 
-1. Download `SuperSmashFlash2-1.1.7-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
+1. Download `SuperSmashFlash2-1.1.8-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
 2. Sign and install it with your sideloading tool. With ESign, import the IPA, then sign and install it inside ESign.
 3. Open **Super Smash Flash 2** and tap **LET'S PLAY** to start the game and enable audio. Tap the game screen to navigate its menus.
 4. Open **CONTROLS** to adjust the touch deck or controller mapping.
@@ -63,6 +63,16 @@ The former Escape button is now **MENU**, which opens a working app menu. To exi
 Under **TOUCH**, choose **EDIT TOUCH LAYOUT** to drag controls, resize the selected control, or hide it. **RESET** restores the layout. Portrait and landscape keep separate arrangements.
 
 Under **CONTROLLER**, assign each supported physical button to a game action. Controller availability depends on the controller profile exposed by iOS.
+
+## Version 1.1.8 changes
+
+- Uses binary requests over the existing offline URL scheme for the sprite cache. The former JavaScript prompt bridge could interrupt Web Audio while thousands of sprites loaded; cache operations no longer invoke dialog handling or create base64/JSON copies of each sprite.
+- Enables the game’s existing sequential resource loader, reducing overlapping asset decoding during startup and character/stage loading. The build derives the movie from the verified original by changing exactly one boolean instruction; the downloaded original remains intact.
+- Native cache failures stop loading and show recovery instead of silently retaining the entire sprite cache in WebKit RAM.
+- In a macOS WebKit comparison, the old build’s startup WebAssembly allocation reached about 784 MB; the sequential/binary build completed startup at about 624 MB. The title/menu remained responsive and a Ness/Mario battle loaded. These measurements cover WebAssembly allocation, not total process memory or physical-iPhone results.
+- A UIKit Mac Catalyst test passed 1,000 byte-exact binary cache round trips, 500 transient lifecycle/audio notifications, background suspension and one-tap resume. Native cache, texture and loader-patch tests passed.
+
+The repeated Resume fix remains in place. Startup reliability, headphone output and longer-session stability still need verification on affected iPhones. Memory use remains substantial, especially in matches.
 
 ## Version 1.1.7 changes
 
@@ -95,7 +105,7 @@ There is **no play-time limit**. Free storage and RAM/graphics memory are differ
 - Static sprite textures use a GPU cache targeting 128 MB, 96 MB on low-memory startup, and 64 MB after a memory warning. Inactive textures reload through stable handles when used again.
 - Render targets, mipmaps and partially modified textures remain outside eviction so cached originals cannot overwrite gameplay effects.
 
-The scratch cache is discarded on app exit and reuses freed storage. Keep at least **1 GB of free device storage** for normal play; long sessions may need more. If storage is unavailable, compression falls back to RAM, which may again hit WebKit memory limits. The cache limits static sprite residency, not all game memory. Ruffle still retains some movie resources, and this release needs testing on affected physical iPhones. A native macOS WebKit integration test reached a Ness battle, returned to character selection, switched to Link and another stage, and reached the next battle without a process termination or sprite-cache error.
+The scratch cache is discarded on app exit and reuses freed storage. Keep at least **1 GB of free device storage** for normal play; long sessions may need more. Since version 1.1.8, unavailable native scratch storage opens recovery instead of falling back to a large RAM cache. The cache limits static sprite residency, not all game memory. Ruffle still retains some movie resources, and this release needs testing on affected physical iPhones. A native macOS WebKit integration test reached a Ness battle, returned to character selection, switched to Link and another stage, and reached the next battle without a process termination or sprite-cache error.
 
 ## Version 1.1.3 changes
 
@@ -109,7 +119,7 @@ The scratch cache is discarded on app exit and reuses freed storage. Keep at lea
 
 | Component | Version |
 |---|---|
-| iOS app | **1.1.7**, build **10** |
+| iOS app | **1.1.8**, build **11** |
 | Portable game | **1.3.1.2** |
 | Ruffle | **0.6.0** |
 
@@ -132,7 +142,7 @@ bash scripts/make-ipa.sh
 
 The downloader restores the original game and Ruffle into ignored folders and verifies every file against [`scripts/assets-manifest.json`](scripts/assets-manifest.json). The game is pinned to [`b3115cd`](https://github.com/VocalNutria9174/SSF2_Portable_Web/tree/b3115cd09c07fdce441d87e6d92e2f283f3432c4), and the runtime to [Ruffle 0.6.0](https://github.com/ruffle-rs/ruffle/releases/tag/v0.6.0).
 
-The build script writes `build/SuperSmashFlash2-unsigned.ipa`. Set `OUT` and `DERIVED` to choose different output and build directories. The script excludes the large Web folder from Xcode’s resource-copy phase and clones it directly into the package on APFS. Packaging strips debug symbols and embedded local build paths, removes source maps, Finder metadata, provisioning profiles, and signature files, and audits the final IPA.
+The build script writes `build/SuperSmashFlash2-unsigned.ipa`. Set `OUT` and `DERIVED` to choose different output and build directories. The downloader also derives `SSF2Portable-ios.swf` using the checked `scripts/patch-game.py` patch. The native shell loads that copy in both Xcode and IPA builds; the verified original remains intact. The script excludes the large Web folder from Xcode’s resource-copy phase and clones it directly into the package on APFS. Packaging strips debug symbols and embedded local build paths, removes source maps, Finder metadata, provisioning profiles, and signature files, and audits the final IPA.
 
 For a signed build, restore the assets, open `SSF2-iOS.xcodeproj` in Xcode, choose your team in **Signing & Capabilities**, then build for your device.
 
@@ -152,6 +162,8 @@ node tests/gpu-recovery.cjs
 node tests/audio.cjs
 python3 scripts/audit-source.py
 ```
+
+After restoring the game assets, verify the one-instruction loader patch with `python3 tests/game-patch.py`.
 
 The native cache can be checked on macOS with:
 

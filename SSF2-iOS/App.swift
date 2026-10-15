@@ -96,7 +96,7 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
         guard let root = Bundle.main.url(forResource: "Web", withExtension: nil) else {
             showRecovery("The bundled game folder is missing."); return
         }
-        let assets = GameSchemeHandler(root: root)
+        let assets = GameSchemeHandler(root: root, textures: textures)
         assets.onResponse = { path, status, _ in if status != 200 { Log.write("asset \(status) \(path)") } }
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
@@ -151,7 +151,7 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
         switch message.name {
         case "haptic": feedback.impactOccurred(intensity: 0.65); feedback.prepare()
         case "gameFailure":
-            guard let reason = message.body as? String, ["graphics-lost", "sprite-cache-read"].contains(reason) else { return }
+            guard let reason = message.body as? String, ["graphics-lost", "sprite-cache-read", "sprite-cache-write", "sprite-cache-unavailable"].contains(reason) else { return }
             enableLowMemoryMode()
             showRecovery("The game was interrupted. Restart to return to the main menu. The current match cannot be recovered.")
         default: break
@@ -169,12 +169,6 @@ final class GameViewController: UIViewController, WKScriptMessageHandler, WKNavi
     private func openExternally(_ url: URL) {
         guard ["http", "https", "mailto"].contains(url.scheme?.lowercased()) else { return }
         UIApplication.shared.open(url)
-    }
-    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
-        guard webView === self.webView, prompt == "SSF2TextureCache", trusted(frame), let message = defaultText else {
-            completionHandler(nil); return
-        }
-        completionHandler(autoreleasepool { textures.respond(message) })
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         guard webView === self.webView else { return }
