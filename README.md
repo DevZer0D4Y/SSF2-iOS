@@ -32,7 +32,7 @@ YouTube: https://www.youtube.com/@develop_erZ
 
 ## Installation
 
-1. Download `SuperSmashFlash2-1.1.8-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
+1. Download `SuperSmashFlash2-1.1.9-unsigned.ipa` from the [latest release](https://github.com/DevZer0D4Y/SSF2-iOS/releases/latest).
 2. Sign and install it with your sideloading tool. With ESign, import the IPA, then sign and install it inside ESign.
 3. Open **Super Smash Flash 2** and tap **LET'S PLAY** to start the game and enable audio. Tap the game screen to navigate its menus.
 4. Open **CONTROLS** to adjust the touch deck or controller mapping.
@@ -62,7 +62,27 @@ The former Escape button is now **MENU**, which opens a working app menu. To exi
 
 Under **TOUCH**, choose **EDIT TOUCH LAYOUT** to drag controls, resize the selected control, or hide it. **RESET** restores the layout. Portrait and landscape keep separate arrangements.
 
-Under **CONTROLLER**, assign each supported physical button to a game action. Controller availability depends on the controller profile exposed by iOS.
+Under **KEYS**, every game input slot is available, including **Jump 2**, **Shield 2**, **Dash**, **C-Up**, **C-Left**, **C-Down**, and **C-Right**. Choose **— Unassigned** to disable a binding. Jump / tap jump retains W by default; to use a dedicated Jump key, assign the same key in both the port and the game.
+
+To use the right stick for directional attacks:
+
+1. In the game’s **Options → Controls → P1**, bind **C-Up = T**, **C-Left = F**, **C-Down = G**, and **C-Right = H**. These game slots initially show n/a, so they must be assigned there too.
+2. In the port’s **CONTROLS → CONTROLLER**, map the four right-stick directions to the matching **C** actions. These are the new defaults; existing custom actions such as Attack are preserved until you change them.
+3. If you prefer other keys, change them in both the game and the port’s **KEYS** panel. C directions send dedicated keys rather than neutral Attack or movement-plus-Attack combinations.
+
+On iPhone, assign an n/a game slot by selecting it in the game and pressing a controller button or stick direction already mapped to that action in the port. For an initially unassigned Jump 2 or Shield 2 key, first choose its key in the port’s KEYS panel.
+
+The right stick selects one direction on diagonal tilts. The left stick keeps diagonal movement and has an adjustable dead zone with hysteresis to reduce jitter. Optional **Left-stick strength controls walk / dash** sends direction alone for light tilts and adds Dash above 75% horizontal tilt. Bind the game’s **Dash** to **Shift**, and turn **Auto-Dash** and **D-Tap Dash** off for predictable walking. This provides two speed levels rather than continuous analog movement.
+
+The portable Flash movie disables its desktop controller initialization. iOS controllers work through the native GameController-to-keyboard bridge, so the game’s device list still says **Keyboard**. Native XInput and continuous analog movement are not enabled by these mappings. Controller availability depends on the controller profile exposed by iOS.
+
+## Version 1.1.9 changes
+
+- Adds the missing C-direction, second Jump, second Shield and Dash bindings to KEYS and all controller action lists.
+- Right-stick defaults map to C-Up / C-Left / C-Down / C-Right using T / F / G / H. Previous unassigned right-stick defaults migrate once; custom action and key mappings are retained.
+- Adds an adjustable stick dead zone, threshold hysteresis, dominant-direction C-stick input, and optional stick-strength walk/dash mapping.
+- Regression checks cover all four C directions, independent movement, diagonal C-stick selection, custom key remapping, disabled bindings, walk/dash strength, dead-zone hysteresis, migration and disconnects. A macOS WebKit integration check assigned all four C slots to T / F / G / H using injected native-controller updates.
+- Keeps the memory and audio changes from 1.1.8. The reported crash after several matches remains unresolved; this update does not claim a memory-crash fix.
 
 ## Version 1.1.8 changes
 
@@ -119,7 +139,7 @@ The scratch cache is discarded on app exit and reuses freed storage. Keep at lea
 
 | Component | Version |
 |---|---|
-| iOS app | **1.1.8**, build **11** |
+| iOS app | **1.1.9**, build **12** |
 | Portable game | **1.3.1.2** |
 | Ruffle | **0.6.0** |
 
@@ -153,6 +173,7 @@ The JavaScript checks need Node.js and do not need the game assets:
 ```sh
 node tests/touch-controls.cjs
 node tests/touch-controls.cjs --native
+node tests/touch-controls.cjs --native --legacy-stick
 node --expose-gc tests/gpu-memory.cjs
 node tests/rendering.cjs
 node tests/gpu-cache.cjs

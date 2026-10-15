@@ -55,3 +55,4 @@ body.fullscreen #loading{border:0;padding-top:50px}
 body.editing [data-action],body.editing #dpad{cursor:move;touch-action:none}
 body.editing button:active{transform:none}
 @media(orientation:portrait){body.fullscreen #stage,body.fullscreen.gamepad #stage{top:calc(env(safe-area-inset-top) + 48px);bottom:auto;height:calc(100vw*9/16)}body.fullscreen .left-deck,body.fullscreen .right-deck{bottom:calc(env(safe-area-inset-bottom) + 54px)}}
+@media(max-width:480px){#bindings,#pad-bindings{grid-template-columns:1fr}}

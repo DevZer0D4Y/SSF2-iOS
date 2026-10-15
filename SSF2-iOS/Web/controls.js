@@ -1,7 +1,7 @@
 (() => {
   'use strict';
-  const defaults = {up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',jump:'KeyW',attack:'KeyP',special:'KeyO',shield:'KeyI',grab:'KeyU',taunt:'Digit1',start:'Space',pause:'Space'};
-  const labels = {up:'Up',down:'Down',left:'Left',right:'Right',jump:'Jump / tap jump',attack:'Attack',special:'Special',shield:'Shield',grab:'Grab',taunt:'Taunt',start:'Start / OK',pause:'Pause'};
+  const defaults = {up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',jump:'KeyW',attack:'KeyP',special:'KeyO',shield:'KeyI',grab:'KeyU',taunt:'Digit1',start:'Space',pause:'Space',jump2:'none',shield2:'none',dash:'ShiftLeft',cup:'KeyT',cdown:'KeyG',cleft:'KeyF',cright:'KeyH'};
+  const labels = {up:'Up',down:'Down',left:'Left',right:'Right',jump:'Jump / tap jump',attack:'Attack',special:'Special',shield:'Shield',grab:'Grab',taunt:'Taunt',start:'Start / OK',pause:'Pause',jump2:'Jump 2',shield2:'Shield 2',dash:'Dash',cup:'C-Up',cdown:'C-Down',cleft:'C-Left',cright:'C-Right'};
   let settings;
   try { settings = JSON.parse(localStorage.getItem('ssf2-touch-v1') || '{}'); } catch { settings = {}; }
   if(!settings || typeof settings!=='object')settings={};
@@ -10,9 +10,13 @@
   if(settings.keys)delete settings.keys.back;
   if(settings.pad)for(const input of Object.keys(settings.pad))if(settings.pad[input]==='back')settings.pad[input]='menu';
   // Controller inputs are named by position, so the same mapping works for Xbox, PlayStation, Nintendo and MFi layouts.
-  const padDefaults = {south:'attack',east:'special',west:'jump',north:'jump',l1:'grab',r1:'grab',l2:'shield',r2:'shield',select:'menu',start:'pause',l3:'start',r3:'taunt',dup:'up',ddown:'down',dleft:'left',dright:'right',lup:'up',ldown:'down',lleft:'left',lright:'right',rup:'none',rdown:'none',rleft:'none',rright:'none'};
+  const padDefaults = {south:'attack',east:'special',west:'jump',north:'jump',l1:'grab',r1:'grab',l2:'shield',r2:'shield',select:'menu',start:'pause',l3:'start',r3:'taunt',dup:'up',ddown:'down',dleft:'left',dright:'right',lup:'up',ldown:'down',lleft:'left',lright:'right',rup:'cup',rdown:'cdown',rleft:'cleft',rright:'cright'};
+  // Upgrade only the old unassigned right-stick defaults; retain custom action mappings.
+  if(settings.controllerVersion!==2&&settings.pad){
+    for(const input of ['rup','rdown','rleft','rright'])if(settings.pad[input]==='none')settings.pad[input]=padDefaults[input];
+  }
   const padLabels = {south:'Bottom face button (A / ✕)',east:'Right face button (B / ○)',west:'Left face button (X / □)',north:'Top face button (Y / △)',l1:'Left bumper (LB / L1 / L)',r1:'Right bumper (RB / R1 / R)',l2:'Left trigger (LT / L2 / ZL)',r2:'Right trigger (RT / R2 / ZR)',select:'View / Share / −',start:'Menu / Options / +',l3:'Left stick press',r3:'Right stick press',dup:'D-pad up',ddown:'D-pad down',dleft:'D-pad left',dright:'D-pad right',lup:'Left stick up',ldown:'Left stick down',lleft:'Left stick left',lright:'Left stick right',rup:'Right stick up',rdown:'Right stick down',rleft:'Right stick left',rright:'Right stick right'};
-  settings = {bindingVersion:2,fullscreen:settings.fullscreen ?? true,keys:{...defaults,...settings.keys},pad:{...padDefaults,...settings.pad},layout:{landscape:{},portrait:{},...settings.layout},size:settings.size || 1,opacity:settings.opacity || 1,haptics:settings.haptics ?? true,hideDeck:settings.hideDeck ?? true};
+  settings = {bindingVersion:2,controllerVersion:2,stickDeadzone:Math.min(.5,Math.max(.15,Number(settings.stickDeadzone)||.25)),analogDash:settings.analogDash===true,fullscreen:settings.fullscreen ?? true,keys:{...defaults,...settings.keys},pad:{...padDefaults,...settings.pad},layout:{landscape:{},portrait:{},...settings.layout},size:settings.size || 1,opacity:settings.opacity || 1,haptics:settings.haptics ?? true,hideDeck:settings.hideDeck ?? true};
   const held = new Map(), pointers = new Map();
   let player, ready = false;
   const panel = document.querySelector('#panel');
@@ -87,8 +91,8 @@
   function suspend(){releaseAll();padTouches.clear();paintPad();}
   window.addEventListener('blur',suspend);
   function suspendGame(){suspend();if(ready&&loading.hidden){wasPlaying=false;player.ruffle().suspend();loading.hidden=false;status.textContent='Game suspended. Tap to continue.';start.textContent='RESUME';start.hidden=false;}}
-  // Native lifecycle owns suspension on iOS. WebKit visibility can change during
-  // synchronous sprite-cache prompts without the app actually entering the background.
+  // Native lifecycle owns suspension on iOS; transient WebKit visibility changes
+  // do not mean the app has entered the background.
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&!window.SSF2Native)suspendGame();});
   window.addEventListener('orientationchange',suspend);
   window.addEventListener('pagehide',suspend);
@@ -97,7 +101,7 @@
   function renderSettings(){
     const root=document.querySelector('#bindings');root.replaceChildren();
     for(const [action,label] of Object.entries(labels)){
-      const row=document.createElement('label');row.append(label);const select=document.createElement('select');select.setAttribute('aria-label',label+' key');
+      const row=document.createElement('label');row.append(label);const select=document.createElement('select');select.setAttribute('aria-label',label+' key');select.add(new Option('— Unassigned','none'));
       for(const code of codes){const option=new Option(code.replace('Key','').replace('Digit','').replace('Arrow','').replace('ShiftLeft','Shift'),code);select.add(option);}
       select.value=settings.keys[action];select.onchange=()=>{suspend();settings.keys[action]=select.value;save();};row.append(select);root.append(row);
     }
@@ -107,6 +111,8 @@
       select.add(new Option('—','none'));select.add(new Option('App menu','menu'));for(const [action,name] of Object.entries(labels))select.add(new Option(name,action));
       select.value=settings.pad[input];select.onchange=()=>{suspend();settings.pad[input]=select.value;save();};row.append(select);padRoot.append(row);
     }
+    const deadzone=document.querySelector('#stick-deadzone');deadzone.value=settings.stickDeadzone;deadzone.oninput=()=>{suspend();settings.stickDeadzone=Number(deadzone.value);save();};
+    const analog=document.querySelector('#analog-dash');analog.checked=settings.analogDash;analog.onchange=()=>{suspend();settings.analogDash=analog.checked;save();};
     const hide=document.querySelector('#hide-deck');hide.checked=settings.hideDeck;hide.onchange=()=>{settings.hideDeck=hide.checked;save();updateControllerUI();};
     for(const name of ['size','opacity']){const input=document.querySelector('#'+name);input.value=settings[name];input.oninput=()=>{settings[name]=Number(input.value);save();};}
     const fullscreen=document.querySelector('#fullscreen');fullscreen.checked=settings.fullscreen;fullscreen.onchange=()=>{endDrag();settings.fullscreen=fullscreen.checked;save();};
@@ -116,7 +122,7 @@
   function openMenu(){if(panel.open||editing)return;suspend();wasPlaying=ready&&player.ruffle().isPlaying;if(ready)player.ruffle().suspend();renderSettings();panel.showModal();}
   document.querySelector('#settings').onclick=openMenu;
   panel.addEventListener('close',()=>{save();if(editing)return;if(wasPlaying)player.ruffle().resume();if(ready)player.focus();});
-  document.querySelector('#reset').onclick=()=>{settings={bindingVersion:2,fullscreen:true,keys:{...defaults},pad:{...padDefaults},layout:settings.layout,size:1,opacity:1,haptics:true,hideDeck:true};save();renderSettings();};
+  document.querySelector('#reset').onclick=()=>{settings={bindingVersion:2,controllerVersion:2,stickDeadzone:.25,analogDash:false,fullscreen:true,keys:{...defaults},pad:{...padDefaults},layout:settings.layout,size:1,opacity:1,haptics:true,hideDeck:true};save();renderSettings();};
   const loading=document.querySelector('#loading'),status=document.querySelector('#status'),start=document.querySelector('#start');
   start.onclick=()=>{window.SSF2Audio?.unlock();player.ruffle().volume=1;player.ruffle().resume();player.focus();loading.hidden=true;};
   document.querySelector('#retry').onclick=()=>location.reload();
@@ -135,8 +141,22 @@
   const webButtons=['south','east','west','north','l1','r1','l2','r2','select','start','l3','r3','dup','ddown','dleft','dright'];
   const padSources=new Map(); // source id -> {name, inputs}
   const cardHeld=new Map(),menuHeld=new Set();
-  function stickInputs(prefix,x=0,y=0){const out=[];if(y<-.5)out.push(prefix+'up');if(y>.5)out.push(prefix+'down');if(x<-.5)out.push(prefix+'left');if(x>.5)out.push(prefix+'right');return out;}
-  function applyPad(source,inputs){
+  const stickState=new Map();
+  function stickInputs(source,prefix,x=0,y=0){
+    x=Number.isFinite(x)?x:0;y=Number.isFinite(y)?y:0;
+    const id=source+':'+prefix,previous=stickState.get(id)||[],out=[];
+    const threshold=direction=>settings.stickDeadzone*(previous.includes(prefix+direction)?0.75:1);
+    // The C-stick chooses one direction; diagonal tilts must not press two C attacks.
+    if(prefix==='r'){
+      const direction=Math.abs(x)>Math.abs(y)?(x<0?'left':'right'):(y<0?'up':'down');
+      if(Math.max(Math.abs(x),Math.abs(y))>threshold(direction))out.push(prefix+direction);
+    }else{
+      if(y < -threshold('up'))out.push(prefix+'up');if(y > threshold('down'))out.push(prefix+'down');
+      if(x < -threshold('left'))out.push(prefix+'left');if(x > threshold('right'))out.push(prefix+'right');
+    }
+    stickState.set(id,out);return out;
+  }
+  function applyPad(source,inputs,axes){
     const pressed=inputs.length>0;
     if(inputs.some(input=>settings.pad[input]==='menu')&&!menuHeld.has(source)&&ready&&loading.hidden&&!editing){menuHeld.add(source);openMenu();}
     else if(!inputs.some(input=>settings.pad[input]==='menu'))menuHeld.delete(source);
@@ -144,6 +164,8 @@
     if(pressed&&!cardHeld.get(source)&&ready&&!loading.hidden&&!start.hidden&&!panel.open&&!editing){start.onclick();cardHeld.set(source,true);}
     else if(!pressed)cardHeld.delete(source);
     const actions=inputs.map(input=>settings.pad[input]).filter(action=>action&&action!=='none'&&action!=='menu');
+    const horizontal=(inputs.includes('lleft')&&settings.pad.lleft==='left')||(inputs.includes('lright')&&settings.pad.lright==='right');
+    if(settings.analogDash&&horizontal&&Math.abs(axes?.[0]||0)>.75)actions.push('dash');
     setPointer(source,ready&&loading.hidden&&!panel.open&&!editing&&!cardHeld.get(source)?actions:[]);
   }
   function updateControllerUI(){
@@ -154,18 +176,18 @@
   }
   function setSources(prefix,pads){
     const seen=new Set();
-    for(const pad of pads){const id=prefix+pad.id;seen.add(id);padSources.set(id,{name:pad.name||'Controller'});applyPad(id,pad.inputs);}
-    for(const id of [...padSources.keys()])if(id.startsWith(prefix)&&!seen.has(id)){padSources.delete(id);cardHeld.delete(id);menuHeld.delete(id);setPointer(id,[]);}
+    for(const pad of pads){const id=prefix+pad.id,axes=pad.axes||[];seen.add(id);padSources.set(id,{name:pad.name||'Controller'});applyPad(id,[...pad.inputs,...stickInputs(id,'l',axes[0],axes[1]),...stickInputs(id,'r',axes[2],axes[3])],axes);}
+    for(const id of [...padSources.keys()])if(id.startsWith(prefix)&&!seen.has(id)){padSources.delete(id);cardHeld.delete(id);menuHeld.delete(id);stickState.delete(id+':l');stickState.delete(id+':r');setPointer(id,[]);}
     updateControllerUI();
   }
   // Native bridge: pads = [{id, name, buttons:[input names], axes:[lx, ly, rx, ry]}] (y positive = down).
-  window.SSF2Pads={update(pads){setSources('native',pads.map(p=>({id:p.id,name:p.name,inputs:[...p.buttons,...stickInputs('l',p.axes[0],p.axes[1]),...stickInputs('r',p.axes[2],p.axes[3])]})));}};
+  window.SSF2Pads={update(pads){setSources('native',pads.map(p=>({id:p.id,name:p.name,inputs:p.buttons,axes:p.axes})));}};
   let padFrame=0;
   function pollGamepads(){
     const pads=[...(navigator.getGamepads?.()||[])].filter(Boolean);
     setSources('pad',pads.map((pad,index)=>{
       const inputs=[];pad.buttons.forEach((button,i)=>{if(button.pressed&&webButtons[i])inputs.push(webButtons[i]);});
-      return {id:index,name:pad.id,inputs:[...inputs,...stickInputs('l',pad.axes[0],pad.axes[1]),...stickInputs('r',pad.axes[2],pad.axes[3])]};
+      return {id:index,name:pad.id,inputs,axes:pad.axes};
     }));
     padFrame=pads.length?requestAnimationFrame(pollGamepads):0;
   }

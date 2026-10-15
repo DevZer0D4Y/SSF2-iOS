@@ -9,7 +9,7 @@ class Element {
   fire(type,params={}){const event={pointerId:1,button:0,clientX:0,clientY:0,preventDefault(){},...params};for(const fn of this.listeners[type]||[])fn(event);}
   setPointerCapture(id){this.captured.add(id);}releasePointerCapture(id){this.captured.delete(id);}hasPointerCapture(id){return this.captured.has(id);}
   getBoundingClientRect(){return{left:0,top:0,width:100,height:100};}
-  contains(t){return t===this;}close(){this.open=false;this.fire('close');}querySelector(sel){return elements[sel]??=new Element();}append(...args){this.children.push(...args);}replaceChildren(){this.children=[];}setAttribute(){}add(){}focus(){}showModal(){this.open=true;}
+  contains(t){return t===this;}close(){this.open=false;this.fire('close');}querySelector(sel){return elements[sel]??=new Element();}append(...args){this.children.push(...args);}replaceChildren(){this.children=[];}setAttribute(){}add(option){this.children.push(option);}focus(){}showModal(){this.open=true;}
 }
 const elements={};const actions=['jump','attack','special','grab','shield','taunt','pause','start','menu'];const buttons=actions.map(a=>new Element(a));
 const events=[],windowEvents={};const api={isPlaying:false,load:async options=>{api.loadedURL=options.url;},resume(){this.isPlaying=true;},suspend(){this.isPlaying=false;}};const player=new Element();player.ruffle=()=>api;
@@ -17,11 +17,14 @@ const document={documentElement:new Element(),hidden:false,querySelector:sel=>el
 const window={RufflePlayer:{newest:()=>({createPlayer:()=>player})},addEventListener:(type,fn)=>windowEvents[type]=fn,dispatchEvent:e=>events.push([e.type,e.code])};
 if(process.argv.includes('--native'))window.SSF2Native={lowMemory:true,textureCache:true};
 const gamepads=[],frames=[];let saved;const initial={keys:{pause:'Enter',jump:'KeyV'},pad:{select:'back'}};document.body=new Element();
-const context={window,document,localStorage:{getItem(){return JSON.stringify(initial);},setItem(key,value){saved=JSON.parse(value);}},KeyboardEvent:class{constructor(type,opts){this.type=type;Object.assign(this,opts);}},Option:class{},location:{reload(){}},navigator:{getGamepads:()=>gamepads},requestAnimationFrame:fn=>frames.push(fn)};
+if(process.argv.includes('--legacy-stick'))initial.pad={...initial.pad,rup:'none',rdown:'attack',rleft:'none',rright:'jump'};
+const context={window,document,localStorage:{getItem(){return JSON.stringify(initial);},setItem(key,value){saved=JSON.parse(value);}},KeyboardEvent:class{constructor(type,opts){this.type=type;Object.assign(this,opts);}},Option:class{constructor(text,value){this.text=text;this.value=value;}},location:{reload(){}},navigator:{getGamepads:()=>gamepads},requestAnimationFrame:fn=>frames.push(fn)};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../SSF2-iOS/Web/controls.js'),'utf8'),context);
 (async()=>{
  await new Promise(setImmediate);assert.equal(saved.keys.pause,'Space');assert.equal(saved.keys.jump,'KeyV');assert.equal(saved.pad.select,'menu');assert(document.body.classes.has('fullscreen'));
  assert.equal(api.loadedURL,window.SSF2Native?'game/SSF2Portable-ios.swf':'game/SSF2Portable.swf','Native builds use the derived sequential-loader movie');
+ assert.equal(saved.controllerVersion,2);assert.equal(saved.pad.rup,'cup');assert.equal(saved.pad.rleft,'cleft');
+ if(process.argv.includes('--legacy-stick')){assert.equal(saved.pad.rdown,'attack','Customized actions survive migration');assert.equal(saved.pad.rright,'jump');}
  // A background event before LET'S PLAY must not replace the initial start card.
  window.SSF2Controls.suspend();assert.notEqual(elements['#start'].textContent,'RESUME');
  // Restore jump for the shared-key input checks.
@@ -66,6 +69,7 @@ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../SSF2-iOS/Web/controls
  assert.deepEqual(events,[['keydown','KeyO'],['keydown','KeyI'],['keydown','KeyA']],'Stick, special and shield map to the bound keys');
  gamepad.axes[0]=0;gamepad.buttons[1].pressed=false;gamepad.buttons[7].pressed=false;frame();
  assert.deepEqual(events.slice(-3).map(e=>e[0]),['keyup','keyup','keyup']);
+ events.length=0;gamepad.axes=[0,0,.8,-.6];frame();assert.deepEqual(events,[['keydown','KeyH']],'Browser Gamepad API uses the same C-stick mapping');gamepad.axes=[0,0,0,0];frame();assert.deepEqual(events.at(-1),['keyup','KeyH']);
  events.length=0;gamepad.buttons[13].pressed=true;frame();windowEvents.gamepaddisconnected();
  assert.deepEqual(events,[['keydown','KeyS'],['keyup','KeyS']],'Disconnecting releases held controller input');
  gamepads.length=0;frame();assert(!document.body.classes.has('gamepad'));
@@ -83,6 +87,42 @@ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../SSF2-iOS/Web/controls
  select.value='jump';select.onchange();elements['#panel'].close();
  events.length=0;window.SSF2Pads.update([{id:1,name:'DualSense',buttons:['south'],axes:[0,0,0,0]}]);
  assert.deepEqual(events,[['keydown','KeyW']],'Remapped button sends the new action');window.SSF2Pads.update([]);
+ // All game input slots are exposed; C directions are actual distinct key bindings.
+ elements['#settings'].onclick();
+ const keyRow=name=>elements['#bindings'].children.find(row=>row.children[0]===name).children[1];
+ const padRow=name=>elements['#pad-bindings'].children.find(row=>row.children[0]===name).children[1];
+ for(const name of ['Jump 2','Shield 2','Dash','C-Up','C-Left','C-Down','C-Right'])assert(keyRow(name),'Missing control slot '+name);
+ for(const [name,action] of [['Right stick up','cup'],['Right stick down','cdown'],['Right stick left','cleft'],['Right stick right','cright']]){
+  const select=padRow(name);assert(select.children.some(option=>option.value===action));select.value=action;select.onchange();
+ }
+ elements['#panel'].close();
+ const native=(axes,buttons=[])=>window.SSF2Pads.update([{id:10,name:'Controller',axes,buttons}]);
+ for(const [axes,key] of [[[0,0,0,-1],'KeyT'],[[0,0,0,1],'KeyG'],[[0,0,-1,0],'KeyF'],[[0,0,1,0],'KeyH']]){
+  events.length=0;native(axes);native([0,0,0,0]);assert.deepEqual(events,[['keydown',key],['keyup',key]],'C-stick emits its dedicated key, never neutral Attack');
+ }
+ events.length=0;native([0,0,.9,-.7]);assert.deepEqual(events,[['keydown','KeyH']],'Diagonal C-stick uses only its dominant direction');native([0,0,0,0]);
+ events.length=0;native([.6,0,0,-1]);native([.6,0,0,1]);
+ assert.deepEqual(events,[['keydown','KeyD'],['keydown','KeyT'],['keyup','KeyT'],['keydown','KeyG']],'C-stick direction changes preserve independent movement');native([0,0,0,0]);
+ elements['#settings'].onclick();keyRow('C-Up').value='KeyY';keyRow('C-Up').onchange();elements['#panel'].close();
+ events.length=0;native([0,0,0,-1]);native([0,0,0,0]);assert.deepEqual(events,[['keydown','KeyY'],['keyup','KeyY']],'C-stick respects remapped keys');
+ elements['#settings'].onclick();keyRow('C-Up').value='none';keyRow('C-Up').onchange();elements['#panel'].close();
+ events.length=0;native([0,0,0,-1]);native([0,0,0,0]);assert.equal(events.length,0,'Unassigned keys emit nothing');
+ elements['#settings'].onclick();keyRow('C-Up').value='KeyT';keyRow('C-Up').onchange();
+ for(const [label,key] of [['Jump 2','KeyJ'],['Shield 2','KeyK']]){keyRow(label).value=key;keyRow(label).onchange();}
+ for(const [label,action] of [['Left bumper (LB / L1 / L)','jump2'],['Right bumper (RB / R1 / R)','shield2'],['Left stick press','dash']]){padRow(label).value=action;padRow(label).onchange();}
+ elements['#analog-dash'].checked=true;elements['#analog-dash'].onchange();elements['#panel'].close();
+ events.length=0;native([0,0,0,0],['l1','r1','l3']);native([0,0,0,0]);
+ assert.deepEqual(events.slice(0,3),[['keydown','KeyJ'],['keydown','KeyK'],['keydown','ShiftLeft']],'Additional jump, shield and dash mappings work together');
+ events.length=0;native([.2,0,0,0]);assert.equal(events.length,0,'Resting stick stays in its dead zone');
+ native([.4,0,0,0]);assert.deepEqual(events,[['keydown','KeyD']],'A light tilt walks');
+ native([.9,0,0,0]);assert.deepEqual(events.at(-1),['keydown','ShiftLeft'],'A strong tilt also presses Dash');
+ native([.4,0,0,0]);assert.deepEqual(events.at(-1),['keyup','ShiftLeft'],'A light tilt releases Dash while movement remains held');
+ native([.2,0,0,0]);assert.deepEqual(events.at(-1),['keyup','ShiftLeft'],'Hysteresis prevents jitter near the dead zone');
+ native([.1,0,0,0]);assert.deepEqual(events.at(-1),['keyup','KeyD']);
+ native([.9,0,0,0]);window.SSF2Pads.update([]);assert.deepEqual(events.slice(-2),[['keyup','KeyD'],['keyup','ShiftLeft']],'Disconnect releases movement and Dash');
+ // Custom dead zone applies to subsequent polls.
+ elements['#settings'].onclick();elements['#stick-deadzone'].value=.45;elements['#stick-deadzone'].oninput();elements['#panel'].close();
+ events.length=0;native([.4,0,0,0]);assert.equal(events.length,0);window.SSF2Pads.update([]);
  // Touch layout editor: drag the D-pad; no game input while editing
  elements['#settings'].onclick();elements['#edit-layout'].onclick();assert.equal(elements['#editor'].hidden,false);
  events.length=0;const capture=type=>windowEvents['document-'+type];
